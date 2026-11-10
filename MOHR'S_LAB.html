@@ -1,0 +1,1919 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Mohr Stress Lab</title>
+<script>try{var m=localStorage.getItem('mohr-theme')||'system';document.documentElement.dataset.theme=m==='system'?(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):m}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout concept: an instrument workbench. A control rail on the left holds the stress tensor.
+   The right side holds linked views of the same state. Colour is reserved for data:
+   three circle colours, tension/compression, and one probe colour for the chosen plane. */
+:root {
+  --bg: #edf0f4;
+  --surface: #fafbfc;
+  --surface-2: #f0f3f7;
+  --ink: #101828;
+  --ink-2: #475467;
+  --ink-3: #7a8798;
+  --line: #d3dae3;
+  --line-2: #e4e9ef;
+  --c13: #2459d8;
+  --c12: #c76f00;
+  --c23: #0b8a77;
+  --probe: #d6285e;
+  --div-neg: #2f66e0;
+  --div-mid: #e4e8ee;
+  --div-pos: #d9452c;
+  --seq-lo: #e3e8f1;
+  --seq-hi: #6d1fa0;
+  --good: #16794a;
+  --good-bg: #dcf2e6;
+  --bad: #b42318;
+  --bad-bg: #fde4e1;
+  --warn: #8a5200;
+  --warn-bg: #fdefd0;
+  --font-display: 'Bricolage Grotesque', 'Avenir Next', 'Segoe UI', system-ui, sans-serif;
+  --font-body: 'IBM Plex Sans', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0c121b;
+    --surface: #141c28;
+    --surface-2: #1b2535;
+    --ink: #e7ecf3;
+    --ink-2: #a2afc0;
+    --ink-3: #6f7d90;
+    --line: #2a3648;
+    --line-2: #202b3b;
+    --c13: #6f9cff;
+    --c12: #f2a93b;
+    --c23: #3ec9b0;
+    --probe: #ff6b98;
+    --div-neg: #6f9cff;
+    --div-mid: #3a4659;
+    --div-pos: #ff7d5e;
+    --seq-lo: #2c3649;
+    --seq-hi: #d49cff;
+    --good: #5fd49b;
+    --good-bg: #123325;
+    --bad: #ff8b7e;
+    --bad-bg: #3a1714;
+    --warn: #f2b84b;
+    --warn-bg: #36270a;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0c121b;
+  --surface: #141c28;
+  --surface-2: #1b2535;
+  --ink: #e7ecf3;
+  --ink-2: #a2afc0;
+  --ink-3: #6f7d90;
+  --line: #2a3648;
+  --line-2: #202b3b;
+  --c13: #6f9cff;
+  --c12: #f2a93b;
+  --c23: #3ec9b0;
+  --probe: #ff6b98;
+  --div-neg: #6f9cff;
+  --div-mid: #3a4659;
+  --div-pos: #ff7d5e;
+  --seq-lo: #2c3649;
+  --seq-hi: #d49cff;
+  --good: #5fd49b;
+  --good-bg: #123325;
+  --bad: #ff8b7e;
+  --bad-bg: #3a1714;
+  --warn: #f2b84b;
+  --warn-bg: #36270a;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.5;
+}
+.app { max-width: 1440px; margin: 0 auto; padding-inline: 16px; padding-block: 16px 32px; }
+h1, h2, h3, p { margin: 0; }
+.top { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: end; justify-content: space-between; padding-bottom: 16px; }
+.brand h1 { font-family: var(--font-display); font-weight: 700; font-size: 1.9rem; letter-spacing: -0.02em; line-height: 1.1; text-wrap: balance; }
+.brand p { color: var(--ink-2); font-size: 0.92rem; margin-top: 2px; }
+.tabs { display: flex; gap: 4px; padding: 4px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; overflow-x: auto; max-width: 100%; }
+.tab { font: 500 0.9rem var(--font-body); color: var(--ink-2); background: transparent; border: 0; border-radius: 7px; padding: 7px 12px; cursor: pointer; white-space: nowrap; }
+.tab:hover { color: var(--ink); }
+.tab[aria-selected="true"] { background: var(--ink); color: var(--bg); }
+:focus-visible { outline: 2px solid var(--c13); outline-offset: 2px; }
+
+.shell { display: grid; grid-template-columns: minmax(290px, 340px) minmax(0, 1fr); gap: 16px; align-items: start; }
+.shell.solo { grid-template-columns: minmax(0, 1fr); }
+.shell.solo .rail { display: none; }
+@media (max-width: 940px) { .shell { grid-template-columns: minmax(0, 1fr); } }
+.rail, .stage { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px; min-width: 0; }
+.label { font: 600 0.7rem var(--font-mono); letter-spacing: 0.09em; text-transform: uppercase; color: var(--ink-2); }
+.card-head { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: baseline; justify-content: space-between; margin-bottom: 10px; }
+.gk { text-transform: none; }
+.hint { color: var(--ink-3); font-size: 0.8rem; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 16px; }
+
+/* stress inputs */
+.srow { display: grid; grid-template-columns: 3.3rem minmax(0, 1fr) 4.9rem; gap: 8px; align-items: center; padding: 2px 0; }
+.srow label { font: 500 0.95rem var(--font-body); white-space: nowrap; }
+.srow label sub { font-size: 0.7em; }
+input[type="number"], select {
+  font: 500 0.9rem var(--font-mono); color: var(--ink); background: var(--surface-2);
+  border: 1px solid var(--line); border-radius: 6px; padding: 5px 7px; width: 100%; min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+select { font-family: var(--font-body); }
+input[type="range"] { width: 100%; accent-color: var(--c13); margin: 0; min-width: 0; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.chip, .btn {
+  font: 500 0.82rem var(--font-body); color: var(--ink); background: var(--surface-2);
+  border: 1px solid var(--line); border-radius: 6px; padding: 5px 9px; cursor: pointer;
+}
+.chip:hover, .btn:hover { border-color: var(--ink-3); }
+.btn.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.btn[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.seg { display: inline-flex; gap: 0; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+.seg .btn { border: 0; border-radius: 0; }
+details.gen { margin-top: 12px; border-top: 1px solid var(--line-2); padding-top: 10px; }
+details.gen summary { cursor: pointer; font-weight: 500; font-size: 0.9rem; }
+.fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+.field { display: flex; flex-direction: column; gap: 3px; font-size: 0.78rem; color: var(--ink-2); min-width: 0; }
+.field.wide { grid-column: 1 / -1; }
+.note { font-size: 0.8rem; color: var(--ink-2); margin-top: 8px; }
+
+/* readouts */
+.kv { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; margin: 0; align-items: baseline; }
+.kv dt { color: var(--ink-2); font-size: 0.88rem; display: flex; align-items: center; gap: 7px; }
+.kv dt sub { font-size: 0.7em; }
+.kv dd { margin: 0; font: 500 0.92rem var(--font-mono); text-align: right; font-variant-numeric: tabular-nums; }
+.kv .sep { grid-column: 1 / -1; height: 1px; background: var(--line-2); margin: 4px 0; }
+.sw { width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex: none; }
+.big { font: 600 1.6rem var(--font-mono); font-variant-numeric: tabular-nums; line-height: 1.1; }
+.bigs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
+.bigs > div { background: var(--surface-2); border: 1px solid var(--line-2); border-radius: 8px; padding: 9px 11px; }
+.bigs .big { margin-top: 2px; }
+table.dirs { width: 100%; border-collapse: collapse; font: 500 0.82rem var(--font-mono); font-variant-numeric: tabular-nums; margin-top: 8px; }
+table.dirs th, table.dirs td { text-align: right; padding: 3px 4px; border-bottom: 1px solid var(--line-2); }
+table.dirs th:first-child, table.dirs td:first-child { text-align: left; }
+table.dirs th { color: var(--ink-2); font-weight: 500; }
+.scroll-x { overflow-x: auto; }
+
+/* canvases */
+canvas { display: block; width: 100%; touch-action: none; }
+#cv3d { aspect-ratio: 1 / 1; }
+#cvMohr { aspect-ratio: 3 / 2; }
+#cvLocus { aspect-ratio: 1 / 1; }
+#cvStrain { aspect-ratio: 1 / 1; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 0.8rem; color: var(--ink-2); margin-bottom: 6px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.check { display: inline-flex; align-items: center; gap: 6px; font-size: 0.82rem; color: var(--ink-2); cursor: pointer; }
+
+/* tables and pills */
+table.res { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+table.res th { text-align: left; font: 600 0.7rem var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-2); padding: 6px 8px; border-bottom: 1px solid var(--line); }
+table.res td { padding: 8px; border-bottom: 1px solid var(--line-2); font-variant-numeric: tabular-nums; }
+table.res td.num { font-family: var(--font-mono); text-align: right; }
+table.res th.num { text-align: right; }
+.pill { display: inline-block; font: 600 0.75rem var(--font-body); padding: 2px 9px; border-radius: 99px; }
+.pill.good { color: var(--good); background: var(--good-bg); }
+.pill.bad { color: var(--bad); background: var(--bad-bg); }
+.pill.warn { color: var(--warn); background: var(--warn-bg); }
+
+/* plane readout layout */
+.plane-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 18px; }
+.ctrl { display: grid; grid-template-columns: 4.2rem minmax(0, 1fr) 3.6rem; gap: 8px; align-items: center; font-size: 0.9rem; }
+.ctrl output { font: 500 0.85rem var(--font-mono); text-align: right; font-variant-numeric: tabular-nums; }
+.formula { font: 400 0.82rem var(--font-mono); color: var(--ink-2); background: var(--surface-2); border-radius: 6px; padding: 8px 10px; margin-top: 10px; overflow-x: auto; white-space: nowrap; }
+
+/* practice */
+.ans-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin: 12px 0; }
+.ans-grid .field span { font-size: 0.85rem; color: var(--ink); font-weight: 500; }
+.ans-grid .mark { font-size: 0.78rem; min-height: 1.1em; }
+.mark.ok { color: var(--good); }
+.mark.no { color: var(--bad); }
+.matrix { display: inline-grid; grid-template-columns: repeat(3, minmax(3.4rem, auto)); gap: 4px 14px; font: 500 1.05rem var(--font-mono); font-variant-numeric: tabular-nums; padding: 8px 14px; border-left: 2px solid var(--ink); border-right: 2px solid var(--ink); border-radius: 6px; margin: 8px 0; }
+.matrix span { text-align: right; }
+.sol { background: var(--surface-2); border-radius: 8px; padding: 12px 14px; margin-top: 12px; font-size: 0.9rem; }
+.sol p + p { margin-top: 6px; }
+.sol code { font-family: var(--font-mono); font-size: 0.85em; }
+.score { font: 500 0.85rem var(--font-mono); color: var(--ink-2); }
+.tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
+.tiles > div { background: var(--surface-2); border: 1px solid var(--line-2); border-radius: 8px; padding: 9px 11px; min-width: 0; }
+.tiles .big { margin-top: 2px; font-size: 1.35rem; overflow-wrap: anywhere; }
+.tiles .sub { font-size: 0.78rem; color: var(--ink-2); margin-top: 2px; }
+.imp-row { display: grid; grid-template-columns: minmax(7rem, 11rem) minmax(0, 1fr) 7.5rem; gap: 8px; align-items: center; font-size: 0.85rem; padding: 3px 0; }
+.imp-bar { height: 10px; background: var(--surface-2); border-radius: 3px; overflow: hidden; display: block; }
+.imp-fill { display: block; height: 100%; background: var(--c13); }
+.imp-fill.top { background: var(--probe); }
+.imp-row .num { font: 500 0.8rem var(--font-mono); text-align: right; font-variant-numeric: tabular-nums; }
+.vars-in { width: 5.6rem; }
+#cvDesign, #cvPfd { aspect-ratio: 4 / 3; }
+#cvHist { aspect-ratio: 16 / 9; }
+.sentence { font-size: 0.9rem; margin-top: 10px; }
+@media (prefers-reduced-motion: no-preference) { .tab, .chip, .btn { transition: background 0.12s, border-color 0.12s; } }
+
+:root{--nav-h:56px;--bg:#f4f5f8;--surface:#fff;--surface-2:#f1f3f7;--ink:#0b1220;--ink-2:#4a5568;--ink-3:#8793a6;--line:#e1e6ee;--line-2:#eef1f6;--c13:#3b6cf6;--c12:#d97706;--c23:#059669;--probe:#e11d63;--div-neg:#3b6cf6;--div-mid:#e6e9ef;--div-pos:#e5482d;--seq-lo:#e6eaf3;--seq-hi:#7c2fc4;--good:#0f9158;--good-bg:#dcf5e8;--bad:#d92d20;--bad-bg:#fde7e4;--warn:#b45309;--warn-bg:#fdf0d5;--glass:rgba(255,255,255,.74);--shadow:0 1px 2px rgba(16,24,40,.05),0 10px 28px -14px rgba(16,24,40,.16);--spring:cubic-bezier(.34,1.56,.64,1);--font-body:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;--font-mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color-scheme:light;interpolate-size:allow-keywords}
+:root[data-theme=dark]{--bg:#08090c;--surface:#101319;--surface-2:#171b23;--ink:#eef1f6;--ink-2:#a3adbd;--ink-3:#6b7587;--line:#242b37;--line-2:#181d26;--c13:#6c93ff;--c12:#fbb040;--c23:#34d3a6;--probe:#ff5c93;--div-neg:#6c93ff;--div-mid:#323a49;--div-pos:#ff7a59;--seq-lo:#262e3d;--seq-hi:#c58bff;--good:#4ade80;--good-bg:#0e2a1c;--bad:#ff7a70;--bad-bg:#351412;--warn:#fbbf24;--warn-bg:#33260a;--glass:rgba(12,14,19,.72);--shadow:0 1px 0 rgba(255,255,255,.03) inset,0 12px 32px -16px rgba(0,0,0,.7);color-scheme:dark}
+body{padding-top:var(--nav-h);font-size:14px;-webkit-font-smoothing:antialiased;background:radial-gradient(900px 400px at 85% -5%,color-mix(in srgb,var(--c13) 12%,transparent),transparent),var(--bg);background-attachment:fixed}
+.nav{position:fixed;inset:0 0 auto;height:var(--nav-h);z-index:50;display:flex;align-items:center;gap:14px;padding:0 max(16px,env(safe-area-inset-right)) 0 max(16px,env(safe-area-inset-left));padding-top:env(safe-area-inset-top);background:var(--glass);backdrop-filter:blur(14px) saturate(1.4);-webkit-backdrop-filter:blur(14px) saturate(1.4);border-bottom:1px solid var(--line)}
+.logo{display:flex;align-items:center;gap:9px;font-weight:650;letter-spacing:-.01em;white-space:nowrap}
+.logo svg{width:26px;height:26px;padding:5px;border-radius:8px;background:linear-gradient(135deg,var(--c13),var(--seq-hi));stroke:#fff;fill:none;stroke-width:2.2}
+.tabs{position:relative;margin:0 auto;display:flex;gap:2px;padding:3px;background:var(--surface-2);border:1px solid var(--line);border-radius:11px;max-width:100%;overflow-x:auto;scrollbar-width:none}
+.tab{position:relative;z-index:1;padding:6px 13px;border-radius:8px;font-weight:550;font-size:13px;color:var(--ink-2);transition:color .2s}
+.tab[aria-selected=true]{background:transparent;color:var(--ink)}
+#ind{position:absolute;left:0;top:3px;bottom:3px;width:0;border-radius:8px;background:var(--surface);box-shadow:var(--shadow),0 0 0 1px var(--line),0 0 18px -4px var(--c13);transition:transform .38s var(--spring),width .38s var(--spring)}
+.acts{display:flex;gap:8px;position:relative}
+.ibtn{width:34px;height:34px;display:grid;place-items:center;padding:0;border-radius:9px}
+.ibtn svg,.ic{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.ic{margin-right:7px;vertical-align:-3px;color:var(--c13)}
+.pop{position:absolute;right:0;top:44px;width:250px;padding:12px;background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow),0 24px 48px -12px rgba(0,0,0,.3);opacity:0;visibility:hidden;transform:translateY(-6px) scale(.97);transform-origin:top right;transition:.2s var(--spring)}
+.pop.open{opacity:1;visibility:visible;transform:none}
+.pop .label{display:block;margin:8px 0 5px}.pop .label:first-child{margin-top:0}.pop .seg{display:flex}.pop .seg .btn{flex:1}.pop .btn.wide{width:100%;margin-top:12px}
+.app{max-width:1480px}
+.shell{grid-template-columns:minmax(300px,350px) minmax(0,1fr);transition:grid-template-columns .3s ease}
+.shell.collapsed{grid-template-columns:0 minmax(0,1fr);gap:0}.shell.collapsed .rail{display:none}
+.rail{position:sticky;top:calc(var(--nav-h) + 14px);max-height:calc(100vh - var(--nav-h) - 28px);overflow:auto;scrollbar-width:thin;padding-right:2px}
+.handle{display:none}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;box-shadow:var(--shadow);transition:border-color .2s,transform .25s}
+.card:hover{border-color:color-mix(in srgb,var(--c13) 30%,var(--line))}
+.label{font:600 .68rem var(--font-mono);letter-spacing:.1em;color:var(--ink-2)}
+.card-head{margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--line-2)}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+body[data-tab=design] .kpis,body[data-tab=practice] .kpis{display:none}
+.kpi{--k:var(--c13);position:relative;overflow:hidden;padding:12px 14px 14px;background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow)}
+.kpi::before{content:"";position:absolute;inset:0 0 auto;height:2px;background:var(--k)}
+.kpi span{font:600 .8rem var(--font-body);color:var(--k)}.kpi span sub{font-size:.7em}
+.kpi b{display:block;margin:4px 0 8px;font:600 clamp(1.25rem,2.4vw,1.85rem)/1 var(--font-mono);font-variant-numeric:tabular-nums;color:var(--k);text-shadow:0 0 22px color-mix(in srgb,var(--k) 40%,transparent)}
+.kpi u{display:block;height:4px;border-radius:9px;background:var(--surface-2);overflow:hidden}.kpi i{display:block;height:100%;width:0;border-radius:9px;background:var(--k);transition:width .45s cubic-bezier(.2,.8,.2,1)}
+.btn,.chip{font-family:var(--font-body);font-weight:550;border-radius:9px;padding:6px 11px;transition:transform .22s var(--spring),background .15s,border-color .15s,box-shadow .2s}
+.btn:hover,.chip:hover{transform:translateY(-1px);border-color:var(--c13);box-shadow:0 4px 12px -6px var(--c13)}
+.btn:active,.chip:active{transform:scale(.95)}
+.btn.primary,.btn[aria-pressed=true]{background:linear-gradient(180deg,color-mix(in srgb,var(--c13) 92%,#fff),var(--c13));border-color:var(--c13);color:#fff;box-shadow:0 4px 14px -6px var(--c13)}
+.seg{padding:3px;gap:2px;border-radius:11px;background:var(--surface-2)}.seg .btn{border-radius:8px;background:transparent;border:0;box-shadow:none}
+.tab:focus-visible,.btn:focus-visible,.chip:focus-visible{outline-offset:1px}
+input[type=number],select{background:var(--surface-2);border-radius:9px;padding:7px 9px;transition:border-color .15s,box-shadow .2s;-moz-appearance:textfield;appearance:auto}
+input[type=number]::-webkit-inner-spin-button{display:none}
+input[type=number]:hover,select:hover{border-color:var(--ink-3)}
+input[type=number]:focus,select:focus{outline:0;border-color:var(--c13);box-shadow:0 0 0 3px color-mix(in srgb,var(--c13) 25%,transparent)}
+input[type=range]{-webkit-appearance:none;appearance:none;background:transparent;height:22px;cursor:pointer;--p:50%}
+input[type=range]::-webkit-slider-runnable-track{height:6px;border-radius:9px;background:linear-gradient(90deg,var(--c13) var(--p),var(--line) var(--p))}
+input[type=range]::-moz-range-track{height:6px;border-radius:9px;background:var(--line)}
+input[type=range]::-moz-range-progress{height:6px;border-radius:9px;background:var(--c13)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;margin-top:-6px;border-radius:50%;background:#fff;border:2px solid var(--c13);box-shadow:0 2px 8px rgba(0,0,0,.3);transition:transform .2s var(--spring),box-shadow .2s}
+input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:#fff;border:2px solid var(--c13)}
+input[type=range]:hover::-webkit-slider-thumb{transform:scale(1.15);box-shadow:0 0 0 6px color-mix(in srgb,var(--c13) 20%,transparent)}
+input[type=range]:active::-webkit-slider-thumb{transform:scale(.95)}
+.tip{position:fixed;z-index:80;transform:translate(-50%,-100%) scale(.9);padding:3px 8px;border-radius:7px;background:var(--ink);color:var(--bg);font:600 11px var(--font-mono);pointer-events:none;opacity:0;transition:opacity .15s,transform .15s var(--spring)}
+.tip.on{opacity:1;transform:translate(-50%,-100%)}
+.bigs>div,.tiles>div{border-radius:11px;background:var(--surface-2)}
+.big{font-family:var(--font-mono)}
+#r-sn{color:var(--c13)}#r-tau{color:var(--c12)}
+.kv dd{color:var(--ink)}
+.formula{border-radius:9px;border:1px dashed var(--line)}
+details.gen{margin-top:12px;border-top:1px solid var(--line-2);padding-top:10px}
+details.gen summary{list-style:none;display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;font-weight:600;font-size:.86rem;color:var(--ink-2);transition:color .15s}
+details.gen summary::-webkit-details-marker{display:none}
+details.gen summary:hover{color:var(--ink)}
+details.gen summary::before{content:"";width:7px;height:7px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(-45deg);transition:transform .3s var(--spring)}
+details.gen[open]>summary::before{transform:rotate(45deg)}
+details.gen::details-content{block-size:0;overflow:clip;opacity:0;transition:block-size .32s ease,opacity .25s,content-visibility .32s allow-discrete}
+details.gen[open]::details-content{block-size:auto;opacity:1}
+table.res tbody tr{transition:background .15s}table.res tbody tr:hover{background:var(--surface-2)}
+.pill{border-radius:99px;padding:2px 10px}
+.pill::before{content:"";display:inline-block;width:6px;height:6px;margin-right:6px;border-radius:50%;background:currentColor}
+#fosMeters{display:grid;gap:10px;margin-bottom:14px}
+.fm{display:grid;grid-template-columns:minmax(6rem,9rem) 1fr 4.2rem;gap:10px;align-items:center;font-size:.84rem}
+.fm em{font:600 .9rem var(--font-mono);font-style:normal;text-align:right;color:var(--c)}
+.fbar{position:relative;height:9px;border-radius:9px;background:var(--surface-2);overflow:hidden}
+.fbar::after{content:"";position:absolute;left:33.3%;top:0;bottom:0;width:2px;background:var(--ink-3);opacity:.6}
+.fbar i{display:block;height:100%;width:0;border-radius:9px;background:var(--c);transition:width .5s cubic-bezier(.2,.8,.2,1),background .4s}
+.fm{--c:var(--good)}.fm[data-k=warn]{--c:var(--warn)}.fm[data-k=bad]{--c:var(--bad)}
+.imp-bar{height:8px;border-radius:9px}.imp-fill{border-radius:9px;background:linear-gradient(90deg,var(--c13),var(--seq-hi))}.imp-fill.top{background:linear-gradient(90deg,var(--probe),var(--c12))}
+canvas{border-radius:10px;background:linear-gradient(180deg,transparent,color-mix(in srgb,var(--surface-2) 45%,transparent))}
+.matrix{border-color:var(--c13)}
+@keyframes viewIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:no-preference){[role=tabpanel]:not([hidden]){animation:viewIn .42s cubic-bezier(.2,.8,.2,1)}.kpi,.card{animation:viewIn .5s both}}
+@media(prefers-reduced-motion:reduce){*{transition-duration:.01ms!important;animation:none!important}}
+@media(max-width:940px){
+.logo span{display:none}.nav{gap:8px}.kpis{grid-template-columns:repeat(2,1fr)}.app{padding-bottom:84px}
+.rail{position:fixed;inset:auto 0 0;z-index:40;max-height:78vh;padding:0 12px 16px;gap:12px;background:var(--bg);border-top:1px solid var(--line);border-radius:18px 18px 0 0;box-shadow:0 -16px 40px -16px rgba(0,0,0,.45);transform:translateY(calc(100% - 52px));transition:transform .42s cubic-bezier(.2,.9,.2,1)}
+.rail.open{transform:none}.shell.collapsed .rail{display:flex}
+.handle{display:flex;flex-direction:column;align-items:center;gap:4px;position:sticky;top:0;z-index:2;width:100%;min-height:52px;padding:8px 0;border:0;background:var(--bg);color:var(--ink-2);font:600 12px var(--font-body);cursor:pointer}
+.handle span{width:38px;height:4px;border-radius:9px;background:var(--line)}
+#railBtn{display:none}}
+@media(max-width:560px){.fm{grid-template-columns:5.5rem 1fr 3.6rem}}
+</style></head><body>
+<header class="nav">
+  <div class="logo"><svg viewBox="0 0 24 24"><circle cx="9" cy="14" r="5"/><circle cx="16" cy="14" r="3"/><path d="M3 20h18"/></svg><span>Mohr Stress Lab</span></div>
+  <nav class="tabs" role="tablist" aria-label="Views"><i id="ind"></i>
+    <button class="tab" role="tab" data-tab="explorer" aria-selected="true">3D Mohr</button>
+    <button class="tab" role="tab" data-tab="failure" aria-selected="false">Failure</button>
+    <button class="tab" role="tab" data-tab="strain" aria-selected="false">Strain</button>
+    <button class="tab" role="tab" data-tab="design" aria-selected="false">Design &amp; Risk</button>
+    <button class="tab" role="tab" data-tab="practice" aria-selected="false">Practice</button>
+  </nav>
+  <div class="acts">
+    <button class="btn ibtn" id="railBtn" type="button" title="Toggle controls" aria-label="Toggle controls"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4zM9 5v14"/></svg></button>
+    <button class="btn ibtn" id="setBtn" type="button" title="Settings" aria-label="Settings"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg></button>
+    <div class="pop" id="pop">
+      <span class="label">Theme</span>
+      <div class="seg"><button class="btn" data-themeset="dark" type="button">Dark</button><button class="btn" data-themeset="light" type="button">Light</button><button class="btn" data-themeset="system" type="button">System</button></div>
+      <span class="label">Angle units</span>
+      <div class="seg"><button class="btn" data-ang="deg" aria-pressed="true" type="button">Degrees</button><button class="btn" data-ang="rad" aria-pressed="false" type="button">Radians</button></div>
+      <button class="btn wide" id="resetBtn" type="button">Quick reset to defaults</button>
+    </div>
+  </div>
+</header>
+<div class="app">
+<div class="shell" id="shell">
+    <aside class="rail">
+      <section class="card" aria-labelledby="h-stress">
+        <div class="card-head"><h2 class="label" id="h-stress">Strain at the point</h2><span class="hint">microstrain, 10⁻⁶</span></div>
+        <div id="rows"></div>
+        <p class="note" style="margin-top:4px">Enter the three normal strains. Shear strains (engineering γ) are optional.</p>
+        <div class="fields">
+          <label class="field">Young's modulus E (GPa)<input type="number" id="mE" value="200" min="0.1" step="5"></label>
+          <label class="field">Poisson's ratio ν<input type="number" id="mNu" value="0.3" min="-0.99" max="0.49" step="0.01"></label>
+        </div>
+        <div class="chips" id="presets" role="group" aria-label="Example states"></div>
+        <details class="gen">
+          <summary>Generate from a loading case</summary>
+          <div class="fields">
+            <label class="field wide">Case
+              <select id="caseSel">
+                <option value="vessel">Thin-walled cylinder under pressure</option>
+                <option value="shaft">Shaft: torsion, bending, axial load</option>
+                <option value="beam">Beam: bending and shear</option>
+              </select>
+            </label>
+          </div>
+          <div class="fields" data-case="vessel">
+            <label class="field">Pressure p (MPa)<input type="number" id="v_p" value="2" step="0.5"></label>
+            <label class="field">Mean radius r (mm)<input type="number" id="v_r" value="500" step="10"></label>
+            <label class="field">Wall t (mm)<input type="number" id="v_t" value="5" step="0.5"></label>
+            <label class="field">Point on<select id="v_pt"><option value="outer">Outer surface</option><option value="inner">Inner surface</option></select></label>
+            <p class="note wide field">x along the axis, y hoop, z radial. Hoop = pr/t, axial = pr/2t.</p>
+          </div>
+          <div class="fields" data-case="shaft" hidden>
+            <label class="field">Torque T (N·m)<input type="number" id="s_T" value="800" step="50"></label>
+            <label class="field">Diameter d (mm)<input type="number" id="s_d" value="50" step="1"></label>
+            <label class="field">Axial load P (kN)<input type="number" id="s_P" value="50" step="5"></label>
+            <label class="field">Bending M (N·m)<input type="number" id="s_M" value="500" step="50"></label>
+            <p class="note wide field">Point on the top outer fibre. x along the shaft, y up. σx = 32M/πd³ + 4P/πd², τxy = 16T/πd³.</p>
+          </div>
+          <div class="fields" data-case="beam" hidden>
+            <label class="field">Moment M (kN·m)<input type="number" id="b_M" value="20" step="1"></label>
+            <label class="field">Shear V (kN)<input type="number" id="b_V" value="30" step="1"></label>
+            <label class="field">I (10⁶ mm⁴)<input type="number" id="b_I" value="80" step="1"></label>
+            <label class="field">y from neutral axis (mm)<input type="number" id="b_y" value="60" step="5"></label>
+            <label class="field">Q (10³ mm³)<input type="number" id="b_Q" value="600" step="10"></label>
+            <label class="field">Width b (mm)<input type="number" id="b_b" value="50" step="5"></label>
+            <p class="note wide field">σx = −My/I (tension below the neutral axis for sagging), τxy = VQ/Ib.</p>
+          </div>
+          <div class="chips"><button class="btn primary" id="applyCase" type="button">Apply to stress state</button></div>
+        </details>
+      </section>
+
+      <section class="card" aria-labelledby="h-sout">
+        <div class="card-head"><h2 class="label" id="h-sout">Stress from Hooke's law</h2><span class="hint">MPa</span></div>
+        <dl class="kv">
+          <dt>σ<sub>xx</sub></dt><dd id="s-xx"></dd>
+          <dt>σ<sub>yy</sub></dt><dd id="s-yy"></dd>
+          <dt>σ<sub>zz</sub></dt><dd id="s-zz"></dd>
+          <dt>τ<sub>xy</sub></dt><dd id="s-xy"></dd>
+          <dt>τ<sub>yz</sub></dt><dd id="s-yz"></dd>
+          <dt>τ<sub>zx</sub></dt><dd id="s-zx"></dd>
+        </dl>
+        <div class="formula">σᵢᵢ = λ·Δ + 2G·εᵢᵢ &nbsp; τᵢⱼ = G·γᵢⱼ</div>
+      </section>
+
+      <section class="card" aria-labelledby="h-prin">
+        <div class="card-head"><h2 class="label" id="h-prin">Principal stresses</h2></div>
+        <dl class="kv">
+          <dt><i class="sw" style="background:var(--div-pos)"></i>σ<sub>1</sub></dt><dd id="o-p1"></dd>
+          <dt><i class="sw" style="background:var(--ink-3)"></i>σ<sub>2</sub></dt><dd id="o-p2"></dd>
+          <dt><i class="sw" style="background:var(--div-neg)"></i>σ<sub>3</sub></dt><dd id="o-p3"></dd>
+          <div class="sep"></div>
+          <dt>τ<sub>max</sub> = (σ<sub>1</sub>−σ<sub>3</sub>)/2</dt><dd id="o-tmax"></dd>
+          <dt>σ<sub>oct</sub> = I<sub>1</sub>/3</dt><dd id="o-soct"></dd>
+          <dt>τ<sub>oct</sub></dt><dd id="o-toct"></dd>
+          <dt>von Mises σ<sub>vm</sub></dt><dd id="o-vm"></dd>
+          <div class="sep"></div>
+          <dt>I<sub>1</sub> (trace)</dt><dd id="o-i1"></dd>
+          <dt>I<sub>2</sub></dt><dd id="o-i2"></dd>
+          <dt>I<sub>3</sub> (determinant)</dt><dd id="o-i3"></dd>
+        </dl>
+        <details class="gen">
+          <summary>Principal directions</summary>
+          <div class="scroll-x"><table class="dirs" id="dirs"></table></div>
+          <p class="note">Unit vectors in the x, y, z axes. Each is the normal of a principal plane, where τ = 0.</p>
+        </details>
+      </section>
+    </aside>
+
+    <main class="stage"><div class="kpis" id="kpis"><div class="kpi" style="--k:var(--div-pos)"><span>σ<sub>1</sub></span><b></b><u><i></i></u></div><div class="kpi" style="--k:var(--c12)"><span>σ<sub>2</sub></span><b></b><u><i></i></u></div><div class="kpi" style="--k:var(--div-neg)"><span>σ<sub>3</sub></span><b></b><u><i></i></u></div><div class="kpi" style="--k:var(--c23)"><span>τ<sub>max</sub></span><b></b><u><i></i></u></div></div>
+      <!-- 3D MOHR -->
+      <div id="panel-explorer" class="stage" role="tabpanel">
+        <div class="grid2">
+          <section class="card" aria-labelledby="h-3d">
+            <div class="card-head">
+              <h2 class="label" id="h-3d">Plane orientations</h2>
+              <div class="seg" role="group" aria-label="Colour the sphere by">
+                <button class="btn" id="col-sn" aria-pressed="true" type="button">Colour: σ<sub>n</sub></button>
+                <button class="btn" id="col-t" aria-pressed="false" type="button">Colour: τ</button>
+              </div>
+            </div>
+            <canvas id="cv3d" aria-label="Unit sphere of plane normals around a stress cube. Drag to rotate; click the sphere or drag the red marker to choose a plane."></canvas>
+            <p class="hint" style="margin-top:6px">Each dot on the sphere is the normal of one plane through the point. Drag to rotate, click to choose a plane, or drag the red marker.</p>
+          </section>
+          <section class="card" aria-labelledby="h-mohr">
+            <div class="card-head">
+              <h2 class="label" id="h-mohr">Mohr's circles</h2>
+              <label class="check"><input type="checkbox" id="showFaces" checked> Show x, y, z faces</label>
+            </div>
+            <div class="legend">
+              <span><i style="background:var(--c13)"></i>σ<sub>1</sub>–σ<sub>3</sub> (outer)</span>
+              <span><i style="background:var(--c12)"></i>σ<sub>1</sub>–σ<sub>2</sub></span>
+              <span><i style="background:var(--c23)"></i>σ<sub>2</sub>–σ<sub>3</sub></span>
+            </div>
+            <canvas id="cvMohr" aria-label="Mohr's circles for the three principal stress pairs, with the chosen plane marked. Click or drag inside the shaded region to choose a plane."></canvas>
+            <p class="hint" style="margin-top:6px">The (σ<sub>n</sub>, τ) of every possible plane lies in the shaded region. Click or drag inside it to pick one.</p>
+          </section>
+        </div>
+
+        <section class="card" aria-labelledby="h-plane">
+          <div class="card-head"><h2 class="label" id="h-plane">Stress on the chosen plane</h2><span class="hint" id="eqnote"></span></div>
+          <div class="plane-grid">
+            <div>
+              <div class="ctrl"><span>Azimuth φ</span><input type="range" id="sl-phi" min="0" max="360" step="1" aria-label="Azimuth"><output id="ov-phi"></output></div>
+              <div class="ctrl" style="margin-top:6px"><span>Polar θ</span><input type="range" id="sl-the" min="0" max="180" step="1" aria-label="Polar angle from z"><output id="ov-the"></output></div>
+              <div class="chips" id="snaps" role="group" aria-label="Snap to a named plane">
+                <button class="chip" data-snap="x" type="button">x face</button>
+                <button class="chip" data-snap="y" type="button">y face</button>
+                <button class="chip" data-snap="z" type="button">z face</button>
+                <button class="chip" data-snap="p1" type="button">σ₁ plane</button>
+                <button class="chip" data-snap="p2" type="button">σ₂ plane</button>
+                <button class="chip" data-snap="p3" type="button">σ₃ plane</button>
+                <button class="chip" data-snap="tmax" type="button">Max shear plane</button>
+                <button class="chip" data-snap="oct" type="button">Octahedral plane</button>
+              </div>
+              <div class="formula">t = σ·n &nbsp; σₙ = n·t &nbsp; τ = |t − σₙn|</div>
+            </div>
+            <div>
+              <div class="bigs">
+                <div><span class="label">Normal <span class="gk">σ<sub>n</sub></span></span><div class="big" id="r-sn"></div></div>
+                <div><span class="label">Shear <span class="gk">τ</span></span><div class="big" id="r-tau"></div></div>
+              </div>
+              <dl class="kv">
+                <dt>Normal n = (l, m, n)</dt><dd id="r-n"></dd>
+                <dt>Traction t = (t<sub>x</sub>, t<sub>y</sub>, t<sub>z</sub>)</dt><dd id="r-t"></dd>
+                <dt>Shear vector (τ<sub>x</sub>, τ<sub>y</sub>, τ<sub>z</sub>)</dt><dd id="r-tv"></dd>
+                <dt>|t|, check √(σ<sub>n</sub>² + τ²)</dt><dd id="r-chk"></dd>
+              </dl>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- FAILURE -->
+      <div id="panel-failure" class="stage" role="tabpanel" hidden>
+        <div class="grid2">
+          <section class="card" aria-labelledby="h-fail">
+            <div class="card-head"><h2 class="label" id="h-fail">Yield criteria</h2></div>
+            <label class="field" style="max-width:220px">Yield strength σ<sub>y</sub> (same unit)
+              <input type="number" id="yield" value="250" min="1" step="10">
+            </label>
+            <div id="fosMeters"></div><div class="scroll-x" style="margin-top:10px">
+              <table class="res" id="failTable">
+                <thead><tr><th>Theory</th><th class="num">σ<sub>eq</sub></th><th class="num">Factor of safety</th><th>Status</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <p class="note">Factor of safety is σ<sub>y</sub>/σ<sub>eq</sub>. It is also the factor by which every stress component can grow before yielding, if the load increases in proportion.</p>
+          </section>
+          <section class="card" aria-labelledby="h-loc">
+            <div class="card-head"><h2 class="label" id="h-loc">Plane-stress yield loci</h2></div>
+            <div class="legend">
+              <span><i style="background:var(--c13)"></i>von Mises</span>
+              <span><i style="background:var(--c12)"></i>Tresca</span>
+              <span><i style="background:var(--ink-3)"></i>Max principal</span>
+            </div>
+            <canvas id="cvLocus" aria-label="Yield loci in the σ1 σ2 plane with the current state marked"></canvas>
+            <p class="note">This chart applies only to plane stress, meaning σ<sub>zz</sub> = τ<sub>yz</sub> = τ<sub>zx</sub> = 0. If your state is fully 3D, the red dot is not shown. Use the table instead, choose a plane-stress preset, or zero those components to see the dot.</p>
+            <p class="hint" id="locusNote" style="margin-top:6px"></p>
+            <div class="chips"><button class="btn" id="toPlane" type="button" hidden>Use the plane-stress version of this state</button></div>
+          </section>
+        </div>
+      </div>
+
+      <!-- STRAIN -->
+      <div id="panel-strain" class="stage" role="tabpanel" hidden>
+        <div class="grid2">
+          <section class="card" aria-labelledby="h-st">
+            <div class="card-head"><h2 class="label" id="h-st">Strains and energy</h2><span class="hint">E and ν are set in the left panel</span></div>
+            <dl class="kv" id="strainKV"></dl>
+          </section>
+          <section class="card" aria-labelledby="h-def">
+            <div class="card-head"><h2 class="label" id="h-def">Deformed element</h2><span class="hint" id="exTxt"></span></div>
+            <canvas id="cvStrain" aria-label="Unit cube and its exaggerated deformed shape"></canvas>
+            <div class="ctrl" style="margin-top:8px;grid-template-columns:6rem minmax(0,1fr)"><span>Exaggeration</span><input type="range" id="sl-ex" min="0.03" max="0.45" step="0.01" value="0.18" aria-label="Deformation exaggeration"></div>
+            <p class="hint" style="margin-top:6px">Dashed: undeformed. Solid: deformed. Drag to rotate.</p>
+          </section>
+        </div>
+      </div>
+
+      <!-- DESIGN AND RISK -->
+      <div id="panel-design" class="stage" role="tabpanel" hidden>
+        <section class="card" aria-labelledby="h-dm">
+          <div class="card-head"><h2 class="label" id="h-dm">Member, loads and scatter</h2><span class="hint">Each input is normal about its mean, with the spread (CoV) you set</span></div>
+          <div class="grid2">
+            <div>
+              <div class="fields" style="margin-top:0">
+                <label class="field wide">Member
+                  <select id="dCase">
+                    <option value="shaft">Shaft: torsion, bending, axial load</option>
+                    <option value="vessel">Thin-walled cylinder under pressure</option>
+                  </select>
+                </label>
+                <label class="field">Failure theory
+                  <select id="dTheory"><option value="vm">von Mises</option><option value="tresca">Tresca</option><option value="maxp">Max principal</option></select>
+                </label>
+                <label class="field">Target factor of safety<input type="number" id="dFos" value="2" min="1" step="0.1"></label>
+                <label class="field">Target failure probability<input type="number" id="dPf" value="0.001" min="0.000001" max="0.5" step="any"></label>
+              </div>
+              <p class="note" id="dNote"></p>
+            </div>
+            <div class="scroll-x">
+              <table class="res" id="dVars">
+                <thead><tr><th>Input</th><th class="num">Mean</th><th class="num">CoV %</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <div class="grid2">
+          <section class="card" aria-labelledby="h-ds">
+            <div class="card-head"><h2 class="label" id="h-ds">Design solver</h2><span class="hint">Mean loads, mean yield strength</span></div>
+            <div class="tiles">
+              <div><span class="label" id="dReqL">Smallest size for FoS</span><div class="big" id="dReq"></div><div class="sub" id="dReqSub"></div></div>
+              <div><span class="label">Next standard size</span><div class="big" id="dStd"></div><div class="sub" id="dStdSub"></div></div>
+            </div>
+            <div class="scroll-x">
+              <table class="res" id="dTheories">
+                <thead><tr><th>Theory</th><th class="num">Required</th><th class="num">Standard</th><th class="num">FoS at standard</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <div class="legend" style="margin-top:12px">
+              <span><i style="background:var(--c13)"></i>von Mises</span>
+              <span><i style="background:var(--c12)"></i>Tresca</span>
+              <span><i style="background:var(--ink-3)"></i>Max principal</span>
+              <span><i style="background:var(--probe)"></i>target</span>
+            </div>
+            <canvas id="cvDesign" aria-label="Factor of safety against size for the three failure theories, with the target and the required size marked"></canvas>
+          </section>
+
+          <section class="card" aria-labelledby="h-ce">
+            <div class="card-head"><h2 class="label" id="h-ce">Critical element at the size used below</h2></div>
+            <div class="chips" style="margin:0 0 12px">
+              <button class="btn" id="dUseStd" type="button">Use next standard size</button>
+              <button class="btn primary" id="dOpen" type="button">Open this element in 3D Mohr</button>
+            </div>
+            <dl class="kv" id="ceKV"></dl>
+            <p class="note" id="ceNote"></p>
+          </section>
+        </div>
+
+        <div class="grid2">
+          <section class="card" aria-labelledby="h-mc">
+            <div class="card-head"><h2 class="label" id="h-mc">Monte Carlo check</h2>
+              <div class="toolbar">
+                <label class="check">Samples
+                  <select id="mcN" style="width:auto"><option value="5000">5,000</option><option value="20000" selected>20,000</option><option value="50000">50,000</option></select>
+                </label>
+                <button class="btn" id="mcSeed" type="button">New samples</button>
+              </div>
+            </div>
+            <div class="tiles" id="mcTiles"></div>
+            <details class="gen" open><summary>Histogram of factor of safety</summary><canvas id="cvHist" aria-label="Histogram of the factor of safety over the random samples, failures shaded"></canvas>
+            <p class="hint" style="margin-top:6px">Red bars are samples with FoS below 1, which yield.</p></details>
+          </section>
+
+          <section class="card" aria-labelledby="h-imp">
+            <div class="card-head"><h2 class="label" id="h-imp">Which input matters most</h2></div>
+            <div id="imp"></div>
+            <p class="note">Share of the variation in FoS, from squared rank correlation (Spearman) of each input with the FoS. The sign is shown as r.</p>
+            <details class="gen"><summary>One-at-a-time sensitivity</summary><div class="scroll-x" style="margin-top:10px">
+              <table class="res" id="oat">
+                <thead><tr><th>Input moved ±1 CoV</th><th class="num">FoS low</th><th class="num">FoS high</th><th class="num">Swing</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div></details>
+          </section>
+        </div>
+
+        <section class="card" aria-labelledby="h-pfd">
+          <div class="card-head"><h2 class="label" id="h-pfd">Failure probability against size</h2><span class="hint">Same random samples at every size</span></div>
+          <div class="plane-grid">
+            <div>
+              <div class="legend">
+                <span><i style="background:var(--c13)"></i>Size for target FoS</span>
+                <span><i style="background:var(--probe)"></i>Size for target failure probability</span>
+              </div>
+              <canvas id="cvPfd" aria-label="Failure probability against size on a log scale"></canvas>
+            </div>
+            <div>
+              <div class="tiles">
+                <div><span class="label">Smallest size for Pf target</span><div class="big" id="pfReq"></div><div class="sub" id="pfReqSub"></div></div>
+                <div><span class="label">Pf at the FoS-design size</span><div class="big" id="pfAtFos"></div><div class="sub" id="pfAtFosSub"></div></div>
+              </div>
+              <p class="sentence" id="dSummary"></p>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- PRACTICE -->
+      <div id="panel-practice" class="stage" role="tabpanel" hidden>
+        <section class="card" aria-labelledby="h-pr">
+          <div class="card-head">
+            <h2 class="label" id="h-pr">Find the principal stresses</h2>
+            <span class="score" id="score">Score 0 / 0</span>
+          </div>
+          <div class="toolbar">
+            <div class="seg" role="group" aria-label="Problem type">
+              <button class="btn" data-pm="plane" aria-pressed="true" type="button">Plane stress</button>
+              <button class="btn" data-pm="one" aria-pressed="false" type="button">One principal known</button>
+              <button class="btn" data-pm="gen" aria-pressed="false" type="button">General 3D</button>
+            </div>
+            <button class="btn primary" id="newProb" type="button">New problem</button>
+          </div>
+          <p class="note" id="probText"></p>
+          <div class="matrix" id="probMatrix" aria-label="Stress tensor"></div>
+          <p class="note">Enter σ<sub>1</sub> ≥ σ<sub>2</sub> ≥ σ<sub>3</sub> and τ<sub>max</sub>. Answers within 0.5 or 1% count as correct.</p>
+          <div class="ans-grid">
+            <label class="field"><span>σ<sub>1</sub></span><input type="number" id="a1" step="any"><span class="mark" id="m1"></span></label>
+            <label class="field"><span>σ<sub>2</sub></span><input type="number" id="a2" step="any"><span class="mark" id="m2"></span></label>
+            <label class="field"><span>σ<sub>3</sub></span><input type="number" id="a3" step="any"><span class="mark" id="m3"></span></label>
+            <label class="field"><span>τ<sub>max</sub></span><input type="number" id="a4" step="any"><span class="mark" id="m4"></span></label>
+          </div>
+          <div class="toolbar">
+            <button class="btn primary" id="checkAns" type="button">Check answers</button>
+            <button class="btn" id="showSol" type="button">Show solution</button>
+            <button class="btn" id="openProb" type="button">Open in 3D Mohr</button>
+          </div>
+          <div class="sol" id="sol" hidden></div>
+        </section>
+      </div>
+    </main>
+  </div>
+</div>
+<script>
+(function () {
+'use strict';
+var $ = function (s, r) { return (r || document).querySelector(s); };
+var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
+
+/* ================= vector helpers ================= */
+var dot = function (a, b) { return a[0]*b[0] + a[1]*b[1] + a[2]*b[2]; };
+var cross = function (a, b) { return [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]]; };
+var norm = function (a) { return Math.hypot(a[0], a[1], a[2]); };
+var unit = function (a) { var n = norm(a) || 1; return [a[0]/n, a[1]/n, a[2]/n]; };
+var add = function (a, b) { return [a[0]+b[0], a[1]+b[1], a[2]+b[2]]; };
+var sub = function (a, b) { return [a[0]-b[0], a[1]-b[1], a[2]-b[2]]; };
+var mul = function (a, k) { return [a[0]*k, a[1]*k, a[2]*k]; };
+var matVec = function (S, n) { return [dot(S[0], n), dot(S[1], n), dot(S[2], n)]; };
+var fmt = function (x, d) {
+  if (d === undefined) d = 2;
+  if (!isFinite(x)) return '∞';
+  var z = Math.abs(x) < 0.5 * Math.pow(10, -d) ? 0 : x;
+  return z.toFixed(d).replace('-', '−');
+};
+var fmt3 = function (v, d) { return '(' + v.map(function (x) { return fmt(x, d === undefined ? 3 : d); }).join(', ') + ')'; };
+
+/* ================= stress engine ================= */
+function det3(S) {
+  return S[0][0]*(S[1][1]*S[2][2]-S[1][2]*S[2][1]) - S[0][1]*(S[1][0]*S[2][2]-S[1][2]*S[2][0]) + S[0][2]*(S[1][0]*S[2][1]-S[1][1]*S[2][0]);
+}
+/* Jacobi rotation for a symmetric 3x3. Returns values sorted high to low with unit eigenvectors. */
+function eig3(S) {
+  var a = S.map(function (r) { return r.slice(); });
+  var V = [[1,0,0],[0,1,0],[0,0,1]];
+  for (var sweep = 0; sweep < 60; sweep++) {
+    var off = Math.abs(a[0][1]) + Math.abs(a[0][2]) + Math.abs(a[1][2]);
+    var scale = Math.abs(a[0][0]) + Math.abs(a[1][1]) + Math.abs(a[2][2]) + off;
+    if (off <= 1e-15 * (scale || 1)) break;
+    for (var p = 0; p < 2; p++) for (var q = p + 1; q < 3; q++) {
+      if (Math.abs(a[p][q]) < 1e-300) continue;
+      var theta = (a[q][q] - a[p][p]) / (2 * a[p][q]);
+      var t = (theta >= 0 ? 1 : -1) / (Math.abs(theta) + Math.sqrt(theta*theta + 1));
+      var c = 1 / Math.sqrt(t*t + 1), s = t * c, k;
+      for (k = 0; k < 3; k++) { var akp = a[k][p], akq = a[k][q]; a[k][p] = c*akp - s*akq; a[k][q] = s*akp + c*akq; }
+      for (k = 0; k < 3; k++) { var apk = a[p][k], aqk = a[q][k]; a[p][k] = c*apk - s*aqk; a[q][k] = s*apk + c*aqk; }
+      for (k = 0; k < 3; k++) { var vkp = V[k][p], vkq = V[k][q]; V[k][p] = c*vkp - s*vkq; V[k][q] = s*vkp + c*vkq; }
+    }
+  }
+  var items = [0, 1, 2].map(function (i) { return { val: a[i][i], vec: [V[0][i], V[1][i], V[2][i]] }; });
+  items.sort(function (x, y) { return y.val - x.val; });
+  return { vals: items.map(function (i) { return i.val; }), vecs: items.map(function (i) { return unit(i.vec); }) };
+}
+function tensor(s) { return [[s.xx, s.xy, s.zx], [s.xy, s.yy, s.yz], [s.zx, s.yz, s.zz]]; }
+
+/* Fibonacci sphere of sample normals */
+var NS = 1800, SAMP = [];
+(function () {
+  var ga = Math.PI * (3 - Math.sqrt(5));
+  for (var i = 0; i < NS; i++) {
+    var z = 1 - 2 * (i + 0.5) / NS, r = Math.sqrt(1 - z*z), ph = i * ga;
+    SAMP.push([r * Math.cos(ph), r * Math.sin(ph), z]);
+  }
+})();
+
+function analyze(s) {
+  var S = tensor(s), e = eig3(S);
+  var p1 = e.vals[0], p2 = e.vals[1], p3 = e.vals[2];
+  var I1 = s.xx + s.yy + s.zz;
+  var I2 = s.xx*s.yy + s.yy*s.zz + s.zz*s.xx - s.xy*s.xy - s.yz*s.yz - s.zx*s.zx;
+  var I3 = det3(S);
+  var vm = Math.sqrt(0.5 * ((p1-p2)*(p1-p2) + (p2-p3)*(p2-p3) + (p3-p1)*(p3-p1)));
+  var sn = new Float32Array(NS), ta = new Float32Array(NS);
+  for (var i = 0; i < NS; i++) { var P = planeAt(S, SAMP[i]); sn[i] = P.sn; ta[i] = P.tau; }
+  return { S: S, vals: e.vals, vecs: e.vecs, I1: I1, I2: I2, I3: I3, vm: vm, tmax: (p1 - p3) / 2,
+           toct: Math.SQRT2 / 3 * vm, sn: sn, ta: ta };
+}
+function planeAt(S, n) {
+  var t = matVec(S, n), sn = dot(n, t);
+  var tv = [t[0] - sn*n[0], t[1] - sn*n[1], t[2] - sn*n[2]];
+  return { t: t, sn: sn, tv: tv, tau: norm(tv), tmag: norm(t) };
+}
+
+/* ================= state ================= */
+var state = {
+  s: { xx: 80, yy: -40, zz: 20, xy: 30, yz: -20, zx: 10 },
+  e: { xx: 0, yy: 0, zz: 0, xy: 0, yz: 0, zx: 0 },
+  n: [0, 0, 1], color: 'sn', faces: true, tab: 'explorer',
+  yieldS: 250, E: 200, nu: 0.3, ex: 0.18
+};
+var A = null;
+function recompute() { A = analyze(state.s); }
+
+/* ================= theme ================= */
+var TC = {};
+function hex2(c) {
+  c = (c || '').trim();
+  if (c[0] === '#') {
+    if (c.length === 4) c = '#' + c[1]+c[1]+c[2]+c[2]+c[3]+c[3];
+    return [parseInt(c.slice(1,3),16), parseInt(c.slice(3,5),16), parseInt(c.slice(5,7),16)];
+  }
+  return [128, 128, 128];
+}
+function mix(a, b, t) {
+  var x = hex2(a), y = hex2(b);
+  return 'rgb(' + Math.round(x[0]+(y[0]-x[0])*t) + ',' + Math.round(x[1]+(y[1]-x[1])*t) + ',' + Math.round(x[2]+(y[2]-x[2])*t) + ')';
+}
+function alpha(c, a) { var v = hex2(c); return 'rgba(' + v[0] + ',' + v[1] + ',' + v[2] + ',' + a + ')'; }
+function readTheme() {
+  var cs = getComputedStyle(document.documentElement);
+  var g = function (k) { return cs.getPropertyValue(k).trim(); };
+  TC = { ink: g('--ink'), ink2: g('--ink-2'), ink3: g('--ink-3'), line: g('--line'), line2: g('--line-2'),
+         surface: g('--surface'), surface2: g('--surface-2'), c13: g('--c13'), c12: g('--c12'), c23: g('--c23'),
+         bad: g('--bad'), good: g('--good'), probe: g('--probe'), neg: g('--div-neg'), mid: g('--div-mid'), pos: g('--div-pos'), lo: g('--seq-lo'), hi: g('--seq-hi') };
+}
+var MONO = '"JetBrains Mono", ui-monospace, Menlo, Consolas, monospace';
+var SANS = '"Inter", "Segoe UI", system-ui, sans-serif';
+
+/* ================= canvas plumbing ================= */
+function fit(o) {
+  var r = o.cv.getBoundingClientRect();
+  var dpr = Math.min(window.devicePixelRatio || 1, 2);
+  var w = Math.max(10, Math.round(r.width)), h = Math.max(10, Math.round(r.height));
+  if (o.cv.width !== Math.round(w * dpr) || o.cv.height !== Math.round(h * dpr)) { o.cv.width = Math.round(w * dpr); o.cv.height = Math.round(h * dpr); }
+  o.W = w; o.H = h; o.dpr = dpr;
+  o.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+function txt(c, s, x, y, o) {
+  o = o || {};
+  c.font = o.font || ('12px ' + MONO);
+  c.fillStyle = o.color || TC.ink;
+  c.textAlign = o.align || 'left';
+  c.textBaseline = o.base || 'alphabetic';
+  c.fillText(s, x, y);
+}
+function niceStep(range, target) {
+  var raw = range / target, e = Math.floor(Math.log10(raw)), f = raw / Math.pow(10, e);
+  return (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * Math.pow(10, e);
+}
+function ticks(a, b, target) {
+  if (!(b > a)) return { list: [], step: 1 };
+  var st = niceStep(b - a, target), out = [];
+  for (var v = Math.ceil(a / st) * st; v <= b + 1e-9 * st; v += st) out.push(Math.abs(v) < 1e-9 * st ? 0 : +v.toFixed(10));
+  return { list: out, step: st };
+}
+function tickFmt(v, step) { var d = step >= 1 ? 0 : Math.min(4, Math.ceil(-Math.log10(step))); return fmt(v, d); }
+
+function Plot2D(cv, draw, opts) {
+  var self = this;
+  this.cv = cv; this.ctx = cv.getContext('2d'); this.draw = draw; this.W = 0; this.H = 0; this.map = null;
+  this.render = function () { fit(self); self.ctx.clearRect(0, 0, self.W, self.H); self.draw(self); };
+  if (opts && opts.pointer) {
+    var down = false;
+    var pos = function (e) { var r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+    cv.addEventListener('pointerdown', function (e) { down = true; cv.setPointerCapture(e.pointerId); var p = pos(e); opts.pointer(p[0], p[1]); });
+    cv.addEventListener('pointermove', function (e) { var p = pos(e); if (down) opts.pointer(p[0], p[1]); else if (opts.hover) opts.hover(p[0], p[1]); });
+    cv.addEventListener('pointerleave', function () { if (opts.leave) opts.leave(); });
+    var up = function () { down = false; };
+    cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+  }
+  new ResizeObserver(function () { if (self.cv.offsetParent !== null) self.render(); }).observe(cv);
+}
+
+/* ---- 3D view with a manual perspective projection (z up) ---- */
+function View3D(cv, draw, opts) {
+  var self = this;
+  opts = opts || {};
+  this.cv = cv; this.ctx = cv.getContext('2d'); this.draw = draw; this.W = 0; this.H = 0;
+  this.yaw = opts.yaw === undefined ? -0.62 : opts.yaw; this.pitch = opts.pitch === undefined ? 0.42 : opts.pitch;
+  this.D = 7; this.R = 100; this.hit = opts.hit; this.onProbe = opts.onProbe; this.onPick = opts.onPick;
+  this.rot = function (p) {
+    var cy = Math.cos(self.yaw), sy = Math.sin(self.yaw), cp = Math.cos(self.pitch), sp = Math.sin(self.pitch);
+    var x1 = p[0]*cy - p[1]*sy, y1 = p[0]*sy + p[1]*cy;
+    return [x1, y1*cp - p[2]*sp, y1*sp + p[2]*cp];
+  };
+  this.unrot = function (q) {
+    var cy = Math.cos(self.yaw), sy = Math.sin(self.yaw), cp = Math.cos(self.pitch), sp = Math.sin(self.pitch);
+    var y1 = q[1]*cp + q[2]*sp, z1 = -q[1]*sp + q[2]*cp;
+    return [q[0]*cy + y1*sy, -q[0]*sy + y1*cy, z1];
+  };
+  this.proj = function (p) {
+    var q = self.rot(p), f = self.D / (self.D + q[1]);
+    return { x: self.W/2 + self.R*f*q[0], y: self.H/2 - self.R*f*q[2], d: q[1], f: f };
+  };
+  this.pickSphere = function (px, py) {
+    var D = self.D, u = (px - self.W/2) / self.R, v = -(py - self.H/2) / self.R;
+    var rmax = D / Math.sqrt(D*D - 1) * 0.9995, rr = Math.hypot(u, v);
+    if (rr > rmax) { u *= rmax / rr; v *= rmax / rr; }
+    var a = 1 + (u*u + v*v) / (D*D), disc = Math.max(0, D*D - a*(D*D - 1)), t = (D - Math.sqrt(disc)) / a;
+    return unit(self.unrot([u*t/D, -D + t, v*t/D]));
+  };
+  this.render = function () {
+    fit(self); self.R = Math.min(self.W, self.H) * 0.29;
+    self.ctx.clearRect(0, 0, self.W, self.H); self.draw(self);
+  };
+  var drag = null; self.vy = 0; self.vp = 0; self.lm = 0; self.raf = 0;
+  self.coast = function () {
+    if (performance.now() - self.lm > 90) return;
+    cancelAnimationFrame(self.raf);
+    (function step() {
+      self.yaw += self.vy; self.pitch = Math.max(-1.45, Math.min(1.45, self.pitch + self.vp));
+      self.vy *= 0.94; self.vp *= 0.94; self.render();
+      if (Math.abs(self.vy) + Math.abs(self.vp) > 0.0004) self.raf = requestAnimationFrame(step);
+    })();
+  };
+  var pos = function (e) { var r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+  cv.addEventListener('pointerdown', function (e) {
+    cv.setPointerCapture(e.pointerId); var p = pos(e);
+    var grab = self.hit && self.hit(p[0], p[1]); cancelAnimationFrame(self.raf); self.vy = self.vp = 0;
+    drag = { x: p[0], y: p[1], sx: p[0], sy: p[1], mode: grab ? 'probe' : 'rotate', moved: false };
+  });
+  cv.addEventListener('pointermove', function (e) {
+    var p = pos(e);
+    if (!drag) { cv.style.cursor = self.hit && self.hit(p[0], p[1]) ? 'grab' : 'default'; return; }
+    var dx = p[0] - drag.x, dy = p[1] - drag.y; drag.x = p[0]; drag.y = p[1];
+    if (Math.hypot(p[0] - drag.sx, p[1] - drag.sy) > 4) drag.moved = true;
+    if (drag.mode === 'probe') { if (drag.moved && self.onProbe) self.onProbe(self.pickSphere(p[0], p[1])); }
+    else { self.vy = dx * 0.008; self.vp = dy * 0.008; self.lm = performance.now(); self.yaw += dx * 0.008; self.pitch = Math.max(-1.45, Math.min(1.45, self.pitch + dy * 0.008)); self.render(); }
+  });
+  var end = function (e) {
+    if (drag && drag.mode === 'rotate' && !drag.moved && self.onPick) { var p = pos(e); self.onPick(self.pickSphere(p[0], p[1])); }
+    if (drag && drag.mode === 'rotate' && drag.moved) self.coast();
+    drag = null;
+  };
+  cv.addEventListener('pointerup', end);
+  cv.addEventListener('pointercancel', function () { drag = null; });
+  new ResizeObserver(function () { if (self.cv.offsetParent !== null) self.render(); }).observe(cv);
+}
+function arrow(v, p0, p1, col, lw, head) {
+  var a = v.proj(p0), b = v.proj(p1), c = v.ctx;
+  var len = Math.hypot(b.x - a.x, b.y - a.y);
+  c.strokeStyle = col; c.fillStyle = col; c.lineWidth = lw || 1.5; c.setLineDash([]);
+  c.beginPath(); c.moveTo(a.x, a.y); c.lineTo(b.x, b.y); c.stroke();
+  if (len < 3) return;
+  var ang = Math.atan2(b.y - a.y, b.x - a.x), h = Math.min(head || 7, len * 0.6);
+  c.beginPath(); c.moveTo(b.x, b.y);
+  c.lineTo(b.x - h*Math.cos(ang - 0.4), b.y - h*Math.sin(ang - 0.4));
+  c.lineTo(b.x - h*Math.cos(ang + 0.4), b.y - h*Math.sin(ang + 0.4));
+  c.closePath(); c.fill();
+}
+function line3(v, p0, p1, col, lw, dash) {
+  var a = v.proj(p0), b = v.proj(p1), c = v.ctx;
+  c.strokeStyle = col; c.lineWidth = lw || 1; c.setLineDash(dash || []);
+  c.beginPath(); c.moveTo(a.x, a.y); c.lineTo(b.x, b.y); c.stroke(); c.setLineDash([]);
+}
+var E3 = [[1,0,0],[0,1,0],[0,0,1]];
+
+/* ================= probe (chosen plane) ================= */
+function sphereColor(i, mode) {
+  if (mode === 'sn') {
+    var M = Math.max(Math.abs(A.vals[0]), Math.abs(A.vals[2]), 1e-9), t = A.sn[i] / M;
+    return t < 0 ? mix(TC.mid, TC.neg, -t) : mix(TC.mid, TC.pos, t);
+  }
+  var tm = Math.max(A.tmax, 1e-9);
+  return mix(TC.lo, TC.hi, Math.min(1, A.ta[i] / tm));
+}
+
+function draw3D(v) {
+  var c = v.ctx, s = state.s, i, j;
+  var M = Math.max(1e-9, Math.abs(s.xx), Math.abs(s.yy), Math.abs(s.zz), Math.abs(s.xy), Math.abs(s.yz), Math.abs(s.zx));
+  var front = [], back = [];
+  for (i = 0; i < NS; i++) {
+    var pj = v.proj(SAMP[i]);
+    (pj.d < 0 ? front : back).push([pj.x, pj.y, i, pj.f]);
+  }
+  var dotsOf = function (list, rad, al) {
+    c.globalAlpha = al;
+    for (var k = 0; k < list.length; k++) {
+      var q = list[k]; c.fillStyle = sphereColor(q[2], state.color);
+      c.beginPath(); c.arc(q[0], q[1], rad * q[3], 0, 6.2832); c.fill();
+    }
+    c.globalAlpha = 1;
+  };
+  dotsOf(back, 1.7, 0.35);
+
+  // probe plane disc
+  var n = state.n, P = planeAt(A.S, n);
+  var h = Math.abs(n[2]) < 0.9 ? [0, 0, 1] : [1, 0, 0];
+  var u = unit(cross(n, h)), w = cross(n, u);
+  c.beginPath();
+  for (i = 0; i <= 72; i++) {
+    var a = i / 72 * 6.2832, pp = v.proj(add(mul(u, Math.cos(a)), mul(w, Math.sin(a))));
+    if (i === 0) c.moveTo(pp.x, pp.y); else c.lineTo(pp.x, pp.y);
+  }
+  c.fillStyle = alpha(TC.probe, 0.1); c.fill(); c.strokeStyle = alpha(TC.probe, 0.55); c.lineWidth = 1.2; c.stroke();
+
+  // coordinate axes
+  var names = ['x', 'y', 'z'];
+  for (i = 0; i < 3; i++) {
+    line3(v, mul(E3[i], -1.12), mul(E3[i], 1.12), alpha(TC.ink2, 0.55), 1);
+    var lp = v.proj(mul(E3[i], 1.26));
+    txt(c, names[i], lp.x, lp.y, { font: 'italic 600 13px ' + SANS, color: TC.ink2, align: 'center', base: 'middle' });
+  }
+  // principal axes
+  var pn = ['σ₁', 'σ₂', 'σ₃'];
+  for (i = 0; i < 3; i++) {
+    line3(v, mul(A.vecs[i], -1.18), mul(A.vecs[i], 1.18), alpha(TC.ink3, 0.9), 1, [4, 3]);
+    var pq = v.proj(mul(A.vecs[i], 1.3));
+    txt(c, pn[i], pq.x, pq.y, { font: '600 12px ' + MONO, color: TC.ink, align: 'center', base: 'middle' });
+  }
+
+  // cube
+  var h0 = 0.3, V = [];
+  for (i = 0; i < 8; i++) V.push([(i & 1 ? 1 : -1) * h0, (i & 2 ? 1 : -1) * h0, (i & 4 ? 1 : -1) * h0]);
+  var edges = [[0,1],[2,3],[4,5],[6,7],[0,2],[1,3],[4,6],[5,7],[0,4],[1,5],[2,6],[3,7]];
+  edges.forEach(function (e) { line3(v, V[e[0]], V[e[1]], TC.ink2, 1.2); });
+  // normal stress arrows
+  var sig = [s.xx, s.yy, s.zz], Tm = [[s.xx, s.xy, s.zx], [s.xy, s.yy, s.yz], [s.zx, s.yz, s.zz]];
+  var sgn, ax, k;
+  for (ax = 0; ax < 3; ax++) for (sgn = -1; sgn <= 1; sgn += 2) {
+    var val = sig[ax];
+    if (Math.abs(val) < 1e-9) continue;
+    var L = 0.1 + 0.28 * Math.abs(val) / M, dir = mul(E3[ax], sgn), fc = mul(dir, h0);
+    var col = val > 0 ? TC.pos : TC.neg;
+    if (val > 0) arrow(v, fc, add(fc, mul(dir, L)), col, 2.4, 8); else arrow(v, add(fc, mul(dir, L)), fc, col, 2.4, 8);
+    if (sgn === 1) {
+      var tp = v.proj(add(fc, mul(dir, L + 0.09)));
+      txt(c, ['σxx', 'σyy', 'σzz'][ax], tp.x, tp.y, { font: '600 11px ' + MONO, color: col, align: 'center', base: 'middle' });
+    }
+  }
+  // shear arrows: tau_ij acts on face i in direction j
+  for (ax = 0; ax < 3; ax++) for (sgn = -1; sgn <= 1; sgn += 2) for (j = 0; j < 3; j++) {
+    if (j === ax) continue;
+    var tv = Tm[ax][j];
+    if (Math.abs(tv) < 1e-9) continue;
+    k = 3 - ax - j;
+    var dirj = mul(E3[j], (tv > 0 ? 1 : -1) * sgn), L2 = 0.12 + 0.2 * Math.abs(tv) / M;
+    var base = add(add(mul(E3[ax], sgn * h0), mul(E3[k], 0.62 * h0 * sgn)), [0, 0, 0]);
+    arrow(v, sub(base, mul(dirj, L2 / 2)), add(base, mul(dirj, L2 / 2)), TC.c12, 2, 6);
+  }
+
+  dotsOf(front, 2.1, 0.88);
+
+  // equivalent planes (same sigma_n, tau)
+  var l = dot(n, A.vecs[0]), m = dot(n, A.vecs[1]), q = dot(n, A.vecs[2]), si, sj, sk;
+  for (si = -1; si <= 1; si += 2) for (sj = -1; sj <= 1; sj += 2) for (sk = -1; sk <= 1; sk += 2) {
+    var en = add(add(mul(A.vecs[0], si * l), mul(A.vecs[1], sj * m)), mul(A.vecs[2], sk * q));
+    var ep = v.proj(en);
+    c.beginPath(); c.arc(ep.x, ep.y, 4, 0, 6.2832); c.strokeStyle = alpha(TC.probe, ep.d < 0 ? 0.95 : 0.45); c.lineWidth = 1.5; c.stroke();
+  }
+  // probe normal, shear direction, marker
+  arrow(v, [0, 0, 0], n, TC.probe, 2.2, 8);
+  if (P.tau > 1e-9) {
+    var sd = unit(P.tv);
+    arrow(v, n, add(n, mul(sd, 0.34)), TC.c12, 2.6, 8);
+    var sp = v.proj(add(n, mul(sd, 0.43)));
+    txt(c, 'τ', sp.x, sp.y, { font: 'italic 700 13px ' + SANS, color: TC.c12, align: 'center', base: 'middle' });
+  }
+  var mp = v.proj(n);
+  c.beginPath(); c.arc(mp.x, mp.y, 7, 0, 6.2832); c.fillStyle = TC.probe; c.fill();
+  c.lineWidth = 2; c.strokeStyle = TC.surface; c.stroke();
+  v.probeScreen = [mp.x, mp.y];
+
+  // legend bar
+  var bw = Math.min(120, v.W * 0.3), bx = 12, by = v.H - 26;
+  for (i = 0; i < bw; i++) {
+    var t = i / (bw - 1), colr;
+    if (state.color === 'sn') colr = t < 0.5 ? mix(TC.neg, TC.mid, t * 2) : mix(TC.mid, TC.pos, (t - 0.5) * 2);
+    else colr = mix(TC.lo, TC.hi, t);
+    c.fillStyle = colr; c.fillRect(bx + i, by, 1.5, 8);
+  }
+  var Mx = Math.max(Math.abs(A.vals[0]), Math.abs(A.vals[2]), 1e-9);
+  txt(c, state.color === 'sn' ? 'σn ' + fmt(-Mx, 0) : 'τ 0', bx, by - 4, { font: '10px ' + MONO, color: TC.ink2 });
+  txt(c, state.color === 'sn' ? fmt(Mx, 0) : fmt(A.tmax, 0), bx + bw, by - 4, { font: '10px ' + MONO, color: TC.ink2, align: 'right' });
+}
+
+/* ================= Mohr (3D) ================= */
+function drawMohr(pl) {
+  var c = pl.ctx, W = pl.W, H = pl.H, i;
+  var s1 = A.vals[0], s2 = A.vals[1], s3 = A.vals[2];
+  var R13 = (s1 - s3) / 2, R12 = (s1 - s2) / 2, R23 = (s2 - s3) / 2, Cm = (s1 + s3) / 2;
+  var ml = 44, mr = 14, mt = 14, bot = 52, pw = W - ml - mr;
+  var hs = Math.max(R13 * 1.18, 0.6), tt = Math.max(R13 * 1.2, 0.6);
+  var sc = Math.min(pw / (2 * hs), (H - bot - mt) / tt);
+  var cx0 = ml + pw / 2, y0 = H - bot;
+  var X = function (s) { return cx0 + (s - Cm) * sc; }, Y = function (t) { return y0 - t * sc; };
+  pl.map = { X: X, Y: Y, sc: sc, y0: y0, cx0: cx0, Cm: Cm };
+  var smin = Cm - pw / 2 / sc, smax = Cm + pw / 2 / sc, tmx = (y0 - mt) / sc;
+  var gx = ticks(smin, smax, 6), gy = ticks(0, tmx, 4);
+  c.lineWidth = 1; c.strokeStyle = TC.line2; c.beginPath();
+  gx.list.forEach(function (v) { c.moveTo(Math.round(X(v)) + 0.5, mt); c.lineTo(Math.round(X(v)) + 0.5, y0); });
+  gy.list.forEach(function (v) { c.moveTo(ml, Math.round(Y(v)) + 0.5); c.lineTo(W - mr, Math.round(Y(v)) + 0.5); });
+  c.stroke();
+  if (0 > smin && 0 < smax) { c.strokeStyle = TC.ink3; c.setLineDash([4, 3]); c.beginPath(); c.moveTo(Math.round(X(0)) + 0.5, mt); c.lineTo(Math.round(X(0)) + 0.5, y0); c.stroke(); c.setLineDash([]); }
+  gx.list.forEach(function (v) { txt(c, tickFmt(v, gx.step), X(v), y0 + 14, { font: '10px ' + MONO, color: TC.ink2, align: 'center' }); });
+  gy.list.forEach(function (v) { if (v > 0) txt(c, tickFmt(v, gy.step), ml - 6, Y(v) + 3, { font: '10px ' + MONO, color: TC.ink2, align: 'right' }); });
+
+  // shaded region between the three circles
+  c.save(); c.beginPath(); c.rect(0, 0, W, y0 + 0.5); c.clip(); c.beginPath();
+  var ring = function (cx, r) { c.moveTo(cx + r, y0); c.arc(cx, y0, r, 0, 6.2832); };
+  ring(X(Cm), R13 * sc); ring(X((s1 + s2) / 2), R12 * sc); ring(X((s2 + s3) / 2), R23 * sc);
+  c.fillStyle = alpha(TC.c13, 0.11); c.fill('evenodd'); c.restore();
+  // every sampled plane
+  c.fillStyle = alpha(TC.c13, 0.3);
+  for (i = 0; i < NS; i++) c.fillRect(X(A.sn[i]) - 0.8, Y(A.ta[i]) - 0.8, 1.6, 1.6);
+
+  // circles
+  var circ = function (mid, R, col, lw) {
+    c.strokeStyle = col; c.lineWidth = lw; c.setLineDash([]); c.beginPath(); c.arc(X(mid), y0, R * sc, Math.PI, 2 * Math.PI); c.stroke();
+    c.strokeStyle = alpha(col, 0.3); c.setLineDash([3, 4]); c.lineWidth = 1; c.beginPath(); c.arc(X(mid), y0, R * sc, 0, Math.PI); c.stroke(); c.setLineDash([]);
+  };
+  circ((s1 + s2) / 2, R12, TC.c12, 1.8); circ((s2 + s3) / 2, R23, TC.c23, 1.8); circ(Cm, R13, TC.c13, 2.2);
+  // axis
+  c.strokeStyle = TC.ink2; c.lineWidth = 1.25; c.beginPath(); c.moveTo(ml, y0 + 0.5); c.lineTo(W - mr, y0 + 0.5); c.stroke();
+  txt(c, 'σ', W - mr, y0 - 6, { font: 'italic 600 13px ' + SANS, color: TC.ink2, align: 'right' });
+  txt(c, 'τ', ml + 6, mt + 10, { font: 'italic 600 13px ' + SANS, color: TC.ink2 });
+
+  // principal markers
+  var lastX = -1e9, row = 0;
+  [[s1, 'σ₁'], [s2, 'σ₂'], [s3, 'σ₃']].forEach(function (pr) {
+    var x = X(pr[0]);
+    c.beginPath(); c.arc(x, y0, 4, 0, 6.2832); c.fillStyle = TC.ink; c.fill();
+    row = Math.abs(x - lastX) < 22 ? row + 1 : 0; lastX = x;
+    txt(c, pr[1], x, y0 + 32 + (row % 2) * 12, { font: '600 11px ' + MONO, color: TC.ink, align: 'center' });
+  });
+  // tau max marker
+  c.beginPath(); c.arc(X(Cm), Y(R13), 3.5, 0, 6.2832); c.fillStyle = TC.c13; c.fill();
+  txt(c, 'τmax ' + fmt(R13, 1), X(Cm), Y(R13) - 8, { font: '600 11px ' + MONO, color: TC.c13, align: 'center' });
+
+  // face points
+  if (state.faces) {
+    var S = A.S;
+    [['x', 0, 1, 2], ['y', 1, 0, 2], ['z', 2, 0, 1]].forEach(function (f) {
+      var sn = S[f[1]][f[1]], tau = Math.hypot(S[f[1]][f[2]], S[f[1]][f[3]]);
+      var px = X(sn), py = Y(tau);
+      c.strokeStyle = TC.ink; c.lineWidth = 1.4; c.fillStyle = TC.surface; c.beginPath(); c.rect(px - 4, py - 4, 8, 8); c.fill(); c.stroke();
+      txt(c, f[0], px + 7, py - 5, { font: 'italic 600 12px ' + SANS, color: TC.ink });
+    });
+  }
+
+  // probe
+  var P = planeAt(A.S, state.n), px = X(P.sn), py = Y(P.tau);
+  c.strokeStyle = alpha(TC.probe, 0.8); c.lineWidth = 1; c.setLineDash([4, 3]);
+  c.beginPath(); c.moveTo(px, py); c.lineTo(px, y0); c.moveTo(px, py); c.lineTo(ml, py); c.stroke(); c.setLineDash([]);
+  c.beginPath(); c.arc(px, py, 6.5, 0, 6.2832); c.fillStyle = TC.probe; c.fill(); c.lineWidth = 2; c.strokeStyle = TC.surface; c.stroke();
+  var l1 = 'σn ' + fmt(P.sn, 2), l2 = 'τ  ' + fmt(P.tau, 2);
+  c.font = '600 11px ' + MONO;
+  var bw = Math.max(c.measureText(l1).width, c.measureText(l2).width) + 14, bh = 34;
+  var bx = px + 12; if (bx + bw > W - 4) bx = px - 12 - bw;
+  var by = py + 12; if (by + bh > y0 - 4) by = py - bh - 12;
+  c.fillStyle = alpha(TC.surface, 0.94); c.strokeStyle = TC.probe; c.lineWidth = 1;
+  c.beginPath(); c.rect(bx, by, bw, bh); c.fill(); c.stroke();
+  txt(c, l1, bx + 7, by + 14, { font: '600 11px ' + MONO, color: TC.ink });
+  txt(c, l2, bx + 7, by + 27, { font: '600 11px ' + MONO, color: TC.ink });
+}
+function mohrPointer(x, y) {
+  var m = plMohr.map; if (!m) return;
+  var best = -1, bd = 1e18, i;
+  var yy = Math.min(y, m.y0);
+  for (i = 0; i < NS; i++) {
+    var dx = m.X(A.sn[i]) - x, dy = m.Y(A.ta[i]) - yy, d = dx*dx + dy*dy;
+    if (d < bd) { bd = d; best = i; }
+  }
+  if (best >= 0) setProbe(SAMP[best]);
+}
+
+/* ================= in-plane transformation (used by the yield loci) ================= */
+function inplane(thDeg) {
+  var s = state.s, th = thDeg * Math.PI / 180, C = (s.xx + s.yy) / 2, D = (s.xx - s.yy) / 2;
+  var c2 = Math.cos(2 * th), s2 = Math.sin(2 * th);
+  var phi = Math.atan2(s.xy, D);
+  return { th: th, C: C, D: D, R: Math.hypot(D, s.xy), phi: phi,
+           sx: C + D*c2 + s.xy*s2, sy: C - D*c2 - s.xy*s2, t: -D*s2 + s.xy*c2, thp: phi / 2 * 180 / Math.PI };
+}
+/* ================= failure tab ================= */
+function failureRows() {
+  var p = A.vals, sy = state.yieldS;
+  return [
+    { name: 'Max principal stress', eq: Math.max(Math.abs(p[0]), Math.abs(p[2])) },
+    { name: 'Tresca (max shear)', eq: p[0] - p[2] },
+    { name: 'von Mises (distortion energy)', eq: A.vm }
+  ].map(function (r) { r.fos = r.eq > 1e-12 ? sy / r.eq : Infinity; return r; });
+}
+function pillFor(f) { return f >= 1.5 ? '<span class="pill good">Safe</span>' : f >= 1 ? '<span class="pill warn">Low margin</span>' : '<span class="pill bad">Yields</span>'; }
+function isPlaneStress() { var s = state.s; return Math.abs(s.zz) + Math.abs(s.yz) + Math.abs(s.zx) < 1e-9; }
+function drawLocus(pl) {
+  var c = pl.ctx, W = pl.W, H = pl.H, sy = state.yieldS, i;
+  var I = inplane(0), sa = I.C + I.R, sb = I.C - I.R, ps = isPlaneStress();
+  var m = Math.max(1.4 * sy, ps ? 1.25 * Math.max(Math.abs(sa), Math.abs(sb)) : 0);
+  var pad = 36, sc = (Math.min(W, H) / 2 - pad) / m, cx = W / 2, cy = H / 2;
+  var X = function (v) { return cx + v * sc; }, Y = function (v) { return cy - v * sc; };
+  var g = ticks(-m, m, 6);
+  c.strokeStyle = TC.line2; c.lineWidth = 1; c.beginPath();
+  g.list.forEach(function (v) { c.moveTo(Math.round(X(v)) + 0.5, cy - m * sc); c.lineTo(Math.round(X(v)) + 0.5, cy + m * sc); c.moveTo(cx - m * sc, Math.round(Y(v)) + 0.5); c.lineTo(cx + m * sc, Math.round(Y(v)) + 0.5); });
+  c.stroke();
+  c.strokeStyle = TC.ink2; c.lineWidth = 1.25; c.beginPath(); c.moveTo(cx - m * sc, cy + 0.5); c.lineTo(cx + m * sc, cy + 0.5); c.moveTo(cx + 0.5, cy - m * sc); c.lineTo(cx + 0.5, cy + m * sc); c.stroke();
+  g.list.forEach(function (v) { if (v !== 0) { txt(c, tickFmt(v, g.step), X(v), cy + 13, { font: '10px ' + MONO, color: TC.ink2, align: 'center' }); txt(c, tickFmt(v, g.step), cx - 5, Y(v) + 3, { font: '10px ' + MONO, color: TC.ink2, align: 'right' }); } });
+  txt(c, 'σ₁', cx + m * sc - 2, cy - 7, { font: 'italic 600 13px ' + SANS, color: TC.ink2, align: 'right' });
+  txt(c, 'σ₂', cx + 7, cy - m * sc + 12, { font: 'italic 600 13px ' + SANS, color: TC.ink2 });
+  // max principal square
+  c.setLineDash([6, 4]); c.strokeStyle = TC.ink3; c.lineWidth = 1.6; c.beginPath(); c.rect(X(-sy), Y(sy), 2 * sy * sc, 2 * sy * sc); c.stroke(); c.setLineDash([]);
+  // Tresca hexagon
+  var hx = [[sy, 0], [sy, sy], [0, sy], [-sy, 0], [-sy, -sy], [0, -sy]];
+  c.strokeStyle = TC.c12; c.lineWidth = 2; c.beginPath(); hx.forEach(function (p, k) { if (k) c.lineTo(X(p[0]), Y(p[1])); else c.moveTo(X(p[0]), Y(p[1])); }); c.closePath(); c.stroke();
+  // von Mises ellipse
+  c.strokeStyle = TC.c13; c.lineWidth = 2.2; c.beginPath();
+  for (i = 0; i <= 200; i++) {
+    var a = i / 200 * 6.2832, u = Math.SQRT2 * sy * Math.cos(a), v = Math.sqrt(2 / 3) * sy * Math.sin(a);
+    var s1 = (u + v) / Math.SQRT2, s2 = (u - v) / Math.SQRT2;
+    if (i) c.lineTo(X(s1), Y(s2)); else c.moveTo(X(s1), Y(s2));
+  }
+  c.stroke();
+  if (!ps) return;
+  var pr = [sa, sb, 0].sort(function (x, y) { return y - x; });
+  var eqs = [Math.max(Math.abs(pr[0]), Math.abs(pr[2])), pr[0] - pr[2], Math.sqrt(0.5 * ((pr[0]-pr[1])*(pr[0]-pr[1]) + (pr[1]-pr[2])*(pr[1]-pr[2]) + (pr[2]-pr[0])*(pr[2]-pr[0])))];
+  var cols = [TC.ink3, TC.c12, TC.c13], maxL = 0;
+  eqs.forEach(function (e) { if (e > 1e-12) maxL = Math.max(maxL, sy / e); });
+  if (maxL > 0 && isFinite(maxL)) {
+    var Lm = Math.min(maxL, m / Math.max(Math.abs(sa), Math.abs(sb), 1e-9));
+    c.strokeStyle = alpha(TC.probe, 0.7); c.lineWidth = 1.2; c.setLineDash([3, 3]);
+    c.beginPath(); c.moveTo(cx, cy); c.lineTo(X(sa * Lm), Y(sb * Lm)); c.stroke(); c.setLineDash([]);
+    eqs.forEach(function (e, k) {
+      if (e < 1e-12) return; var lam = sy / e;
+      c.beginPath(); c.arc(X(sa * lam), Y(sb * lam), 4, 0, 6.2832); c.fillStyle = cols[k]; c.fill(); c.lineWidth = 1.5; c.strokeStyle = TC.surface; c.stroke();
+    });
+  }
+  c.beginPath(); c.arc(X(sa), Y(sb), 6.5, 0, 6.2832); c.fillStyle = TC.probe; c.fill(); c.lineWidth = 2; c.strokeStyle = TC.surface; c.stroke();
+  txt(c, 'now', X(sa) + 10, Y(sb) - 8, { font: '600 11px ' + MONO, color: TC.probe });
+}
+
+/* ================= strain tab ================= */
+function strains() {
+  var s = state.s, mo = moduli(), E = mo.E, nu = mo.nu, G = mo.G;
+  var ex = (s.xx - nu * (s.yy + s.zz)) / E, ey = (s.yy - nu * (s.zz + s.xx)) / E, ez = (s.zz - nu * (s.xx + s.yy)) / E;
+  var gxy = s.xy / G, gyz = s.yz / G, gzx = s.zx / G;
+  var p = A.vals, e1 = (p[0] - nu * (p[1] + p[2])) / E, e2 = (p[1] - nu * (p[2] + p[0])) / E, e3 = (p[2] - nu * (p[0] + p[1])) / E;
+  var U = 0.5 * (s.xx*ex + s.yy*ey + s.zz*ez + s.xy*gxy + s.yz*gyz + s.zx*gzx);
+  var Uv = (1 - 2 * nu) / (6 * E) * A.I1 * A.I1;
+  return { ex: ex, ey: ey, ez: ez, gxy: gxy, gyz: gyz, gzx: gzx, e1: e1, e2: e2, e3: e3, ev: ex + ey + ez, G: G, U: U, Uv: Uv, Ud: U - Uv };
+}
+function drawStrain(v) {
+  var c = v.ctx, st = strains(), i;
+  var T = [[st.ex, st.gxy / 2, st.gzx / 2], [st.gxy / 2, st.ey, st.gyz / 2], [st.gzx / 2, st.gyz / 2, st.ez]];
+  var mx = Math.max(1e-15, Math.abs(st.ex), Math.abs(st.ey), Math.abs(st.ez), Math.abs(st.gxy) / 2, Math.abs(st.gyz) / 2, Math.abs(st.gzx) / 2);
+  var k = state.ex / mx, h0 = 0.6;
+  var V0 = [], V1 = [];
+  for (i = 0; i < 8; i++) {
+    var p = [(i & 1 ? 1 : -1) * h0, (i & 2 ? 1 : -1) * h0, (i & 4 ? 1 : -1) * h0];
+    V0.push(p); V1.push(add(p, mul(matVec(T, p), k)));
+  }
+  var edges = [[0,1],[2,3],[4,5],[6,7],[0,2],[1,3],[4,6],[5,7],[0,4],[1,5],[2,6],[3,7]];
+  var faces = [[0,1,3,2],[4,5,7,6],[0,1,5,4],[2,3,7,6],[0,2,6,4],[1,3,7,5]];
+  for (i = 0; i < 3; i++) arrow(v, [0, 0, 0], mul(E3[i], 1.05), alpha(TC.ink3, 0.8), 1, 6);
+  ['x', 'y', 'z'].forEach(function (nm, a) { var q = v.proj(mul(E3[a], 1.2)); txt(c, nm, q.x, q.y, { font: 'italic 600 13px ' + SANS, color: TC.ink3, align: 'center', base: 'middle' }); });
+  edges.forEach(function (e) { line3(v, V0[e[0]], V0[e[1]], alpha(TC.ink3, 0.9), 1.2, [4, 4]); });
+  var fl = faces.map(function (f) { var d = 0; f.forEach(function (ix) { d += v.rot(V1[ix])[1]; }); return { f: f, d: d / 4 }; }).sort(function (a, b) { return b.d - a.d; });
+  fl.forEach(function (o) {
+    c.beginPath(); o.f.forEach(function (ix, j) { var q = v.proj(V1[ix]); if (j) c.lineTo(q.x, q.y); else c.moveTo(q.x, q.y); }); c.closePath();
+    c.fillStyle = alpha(TC.c13, 0.12); c.fill();
+  });
+  edges.forEach(function (e) { line3(v, V1[e[0]], V1[e[1]], TC.c13, 2); });
+  var el = $('#exTxt'); if (el) el.textContent = 'Displayed ×' + (isFinite(k) ? k.toExponential(1) : '0');
+}
+
+/* ================= UI wiring ================= */
+var KEYS = [['xx', 'ε<sub>xx</sub>'], ['yy', 'ε<sub>yy</sub>'], ['zz', 'ε<sub>zz</sub>'], ['xy', 'γ<sub>xy</sub>'], ['yz', 'γ<sub>yz</sub>'], ['zx', 'γ<sub>zx</sub>']];
+var PRESETS = [
+  ['General 3D', { xx: 80, yy: -40, zz: 20, xy: 30, yz: -20, zx: 10 }],
+  ['Plane stress', { xx: 80, yy: 20, zz: 0, xy: 30, yz: 0, zx: 0 }],
+  ['Uniaxial', { xx: 100, yy: 0, zz: 0, xy: 0, yz: 0, zx: 0 }],
+  ['Pure shear', { xx: 0, yy: 0, zz: 0, xy: 60, yz: 0, zx: 0 }],
+  ['Biaxial', { xx: 80, yy: 40, zz: 0, xy: 0, yz: 0, zx: 0 }],
+  ['Hydrostatic', { xx: -50, yy: -50, zz: -50, xy: 0, yz: 0, zx: 0 }],
+  ['Torsion + axial', { xx: 50, yy: 0, zz: 0, xy: 40, yz: 0, zx: 0 }]
+];
+var rowsEl = $('#rows');
+KEYS.forEach(function (k) {
+  var d = document.createElement('div'); d.className = 'srow';
+  d.innerHTML = '<label for="n-' + k[0] + '">' + k[1] + '</label><input type="range" id="r-' + k[0] + '" min="-2000" max="2000" step="10" aria-label="' + k[0] + '"><input type="number" id="n-' + k[0] + '" step="10">';
+  rowsEl.appendChild(d);
+  var r = d.querySelector('input[type=range]'), n = d.querySelector('input[type=number]');
+  r.addEventListener('input', function () { state.e[k[0]] = parseFloat(r.value); n.value = r.value; changed(); });
+  n.addEventListener('input', function () { var v = parseFloat(n.value); if (isFinite(v)) { state.e[k[0]] = v; r.value = v; changed(); } });
+});
+function syncInputs() {
+  KEYS.forEach(function (k) { $('#r-' + k[0]).value = state.e[k[0]]; $('#n-' + k[0]).value = +state.e[k[0]].toFixed(3); });
+}
+/* Hooke's law, isotropic. Strain input in microstrain, E in GPa, stress in MPa. */
+function moduli() {
+  var E = state.E * 1000, nu = Math.max(-0.99, Math.min(0.499, state.nu));
+  return { E: E, nu: nu, G: E / (2 * (1 + nu)), lam: E * nu / ((1 + nu) * (1 - 2 * nu)) };
+}
+function stressFromStrain(e) {
+  var m = moduli(), f = 1e-6, ev = (e.xx + e.yy + e.zz) * f;
+  return { xx: m.lam * ev + 2 * m.G * e.xx * f, yy: m.lam * ev + 2 * m.G * e.yy * f, zz: m.lam * ev + 2 * m.G * e.zz * f,
+           xy: m.G * e.xy * f, yz: m.G * e.yz * f, zx: m.G * e.zx * f };
+}
+function strainFromStress(s) {
+  var m = moduli(), tr = s.xx + s.yy + s.zz, k = 1e6 / m.E;
+  return { xx: k * ((1 + m.nu) * s.xx - m.nu * tr), yy: k * ((1 + m.nu) * s.yy - m.nu * tr), zz: k * ((1 + m.nu) * s.zz - m.nu * tr),
+           xy: 1e6 * s.xy / m.G, yz: 1e6 * s.yz / m.G, zx: 1e6 * s.zx / m.G };
+}
+/* load a stress state (presets, loading cases, practice) by converting it to the equivalent strains */
+function setStress(o) {
+  var cur = {}; for (var k in state.s) cur[k] = o[k] !== undefined ? o[k] : 0;
+  state.e = strainFromStress(cur); syncInputs(); changed();
+}
+PRESETS.forEach(function (p) {
+  var b = document.createElement('button'); b.className = 'chip'; b.type = 'button'; b.textContent = p[0];
+  b.addEventListener('click', function () { setStress(p[1]); });
+  $('#presets').appendChild(b);
+});
+
+/* loading cases */
+$('#caseSel').addEventListener('change', function (e) { $$('[data-case]').forEach(function (d) { d.hidden = d.getAttribute('data-case') !== e.target.value; }); });
+var gv = function (id) { return parseFloat($('#' + id).value) || 0; };
+$('#applyCase').addEventListener('click', function () {
+  var cs = $('#caseSel').value, o = { xx: 0, yy: 0, zz: 0, xy: 0, yz: 0, zx: 0 };
+  if (cs === 'vessel') {
+    var p = gv('v_p'), r = gv('v_r'), t = Math.max(gv('v_t'), 1e-6);
+    o.xx = p * r / (2 * t); o.yy = p * r / t; o.zz = $('#v_pt').value === 'inner' ? -p : 0;
+  } else if (cs === 'shaft') {
+    var d = Math.max(gv('s_d'), 1e-6);
+    o.xx = 32 * gv('s_M') * 1000 / (Math.PI * d*d*d) + 4 * gv('s_P') * 1000 / (Math.PI * d*d);
+    o.xy = 16 * gv('s_T') * 1000 / (Math.PI * d*d*d);
+  } else {
+    var I = Math.max(gv('b_I'), 1e-9), b = Math.max(gv('b_b'), 1e-9);
+    o.xx = -gv('b_M') * gv('b_y') / I; o.xy = gv('b_V') * gv('b_Q') / (I * b);
+  }
+  Object.keys(o).forEach(function (k) { o[k] = Math.round(o[k] * 1000) / 1000; });
+  setStress(o);
+});
+
+/* probe */
+function setProbe(n) { state.n = unit(n); updateProbeUI(); renderActive(); }
+function updateProbeUI() {
+  var n = state.n, P = planeAt(A.S, n);
+  $('#r-sn').textContent = fmt(P.sn, 2); $('#r-tau').textContent = fmt(P.tau, 2);
+  $('#r-n').textContent = fmt3(n, 3); $('#r-t').textContent = fmt3(P.t, 2); $('#r-tv').textContent = fmt3(P.tv, 2);
+  $('#r-chk').textContent = fmt(P.tmag, 2) + ', ' + fmt(Math.sqrt(P.sn*P.sn + P.tau*P.tau), 2);
+  var phi = Math.atan2(n[1], n[0]) * 180 / Math.PI; if (phi < 0) phi += 360;
+  var the = Math.acos(Math.max(-1, Math.min(1, n[2]))) * 180 / Math.PI;
+  $('#sl-phi').value = phi; $('#sl-the').value = the; $('#ov-phi').textContent = angTxt(phi); $('#ov-the').textContent = angTxt(the);
+  $('#eqnote').textContent = 'The same σn and τ act on 4 differently oriented planes (rings on the sphere).';
+}
+function angSet() {
+  var phi = parseFloat($('#sl-phi').value) * Math.PI / 180, the = parseFloat($('#sl-the').value) * Math.PI / 180;
+  setProbe([Math.sin(the) * Math.cos(phi), Math.sin(the) * Math.sin(phi), Math.cos(the)]);
+}
+$('#sl-phi').addEventListener('input', angSet); $('#sl-the').addEventListener('input', angSet);
+$$('#snaps .chip').forEach(function (b) {
+  b.addEventListener('click', function () {
+    var k = b.getAttribute('data-snap');
+    if (k === 'x') setProbe([1, 0, 0]); else if (k === 'y') setProbe([0, 1, 0]); else if (k === 'z') setProbe([0, 0, 1]);
+    else if (k === 'p1') setProbe(A.vecs[0]); else if (k === 'p2') setProbe(A.vecs[1]); else if (k === 'p3') setProbe(A.vecs[2]);
+    else if (k === 'tmax') setProbe(add(A.vecs[0], A.vecs[2]));
+    else setProbe(add(add(A.vecs[0], A.vecs[1]), A.vecs[2]));
+  });
+});
+$('#col-sn').addEventListener('click', function () { state.color = 'sn'; $('#col-sn').setAttribute('aria-pressed', 'true'); $('#col-t').setAttribute('aria-pressed', 'false'); renderActive(); });
+$('#col-t').addEventListener('click', function () { state.color = 't'; $('#col-t').setAttribute('aria-pressed', 'true'); $('#col-sn').setAttribute('aria-pressed', 'false'); renderActive(); });
+$('#showFaces').addEventListener('change', function (e) { state.faces = e.target.checked; renderActive(); });
+
+/* readouts */
+function updateStressOut() {
+  KEYS.forEach(function (k) { $('#s-' + k[0]).textContent = fmt(state.s[k[0]], 2); });
+}
+function updateReadouts() {
+  paintKpis();
+  $('#o-p1').textContent = fmt(A.vals[0], 3); $('#o-p2').textContent = fmt(A.vals[1], 3); $('#o-p3').textContent = fmt(A.vals[2], 3);
+  $('#o-tmax').textContent = fmt(A.tmax, 3); $('#o-soct').textContent = fmt(A.I1 / 3, 3); $('#o-toct').textContent = fmt(A.toct, 3);
+  $('#o-vm').textContent = fmt(A.vm, 3);
+  $('#o-i1').textContent = fmt(A.I1, 3); $('#o-i2').textContent = fmt(A.I2, 2); $('#o-i3').textContent = fmt(A.I3, 1);
+  var h = '<tr><th></th><th>x</th><th>y</th><th>z</th></tr>';
+  for (var i = 0; i < 3; i++) h += '<tr><td>σ' + ['₁', '₂', '₃'][i] + '</td>' + A.vecs[i].map(function (x) { return '<td>' + fmt(x, 3) + '</td>'; }).join('') + '</tr>';
+  $('#dirs').innerHTML = h;
+}
+function updateFailure() {
+  var rows = failureRows(), tb = $('#failTable tbody');
+  tb.innerHTML = rows.map(function (r) {
+    return '<tr><td>' + r.name + '</td><td class="num">' + fmt(r.eq, 2) + '</td><td class="num">' + (isFinite(r.fos) ? fmt(r.fos, 2) : '∞') + '</td><td>' + pillFor(r.fos) + '</td></tr>';
+  }).join('');
+  var ps = isPlaneStress();
+  $('#locusNote').textContent = ps ? 'Your state is plane stress, so the dot is shown. Dots on the dashed line show where each theory predicts yield if the load grows in proportion.'
+    : 'Your state is 3D (σzz, τyz or τzx is not zero), so the dot is not shown. Use the table above.';
+  $('#toPlane').hidden = ps; paintFos(rows);
+}
+$('#toPlane').addEventListener('click', function () {
+  var s = state.s; setStress({ xx: s.xx, yy: s.yy, xy: s.xy, zz: 0, yz: 0, zx: 0 });
+});
+function updateStrain() {
+  var s = strains(), u = function (x) { return fmt(x * 1e6, 1); };
+  $('#strainKV').innerHTML =
+    '<dt>ε<sub>xx</sub></dt><dd>' + u(s.ex) + ' με</dd><dt>ε<sub>yy</sub></dt><dd>' + u(s.ey) + ' με</dd><dt>ε<sub>zz</sub></dt><dd>' + u(s.ez) + ' με</dd>' +
+    '<div class="sep"></div><dt>γ<sub>xy</sub></dt><dd>' + u(s.gxy) + ' μrad</dd><dt>γ<sub>yz</sub></dt><dd>' + u(s.gyz) + ' μrad</dd><dt>γ<sub>zx</sub></dt><dd>' + u(s.gzx) + ' μrad</dd>' +
+    '<div class="sep"></div><dt>Principal ε<sub>1</sub>, ε<sub>2</sub>, ε<sub>3</sub></dt><dd>' + u(s.e1) + ', ' + u(s.e2) + ', ' + u(s.e3) + '</dd>' +
+    '<dt>Volumetric strain Δ = (1−2ν)I<sub>1</sub>/E</dt><dd>' + u(s.ev) + ' με</dd>' +
+    '<dt>Shear modulus G = E/2(1+ν)</dt><dd>' + fmt(s.G / 1000, 2) + ' GPa</dd>' +
+    '<div class="sep"></div><dt>Strain energy density U</dt><dd>' + fmt(s.U * 1000, 3) + ' kJ/m³</dd>' +
+    '<dt>Volume change part U<sub>v</sub></dt><dd>' + fmt(s.Uv * 1000, 3) + ' kJ/m³</dd><dt>Distortion part U<sub>d</sub></dt><dd>' + fmt(s.Ud * 1000, 3) + ' kJ/m³</dd>';
+}
+$('#yield').addEventListener('input', function (e) { var v = parseFloat(e.target.value); if (v > 0) { state.yieldS = v; updateFailure(); renderActive(); } });
+$('#mE').addEventListener('input', function (e) { var v = parseFloat(e.target.value); if (v > 0) { state.E = v; changed(); } });
+$('#mNu').addEventListener('input', function (e) { var v = parseFloat(e.target.value); if (v > -0.99 && v < 0.5) { state.nu = v; changed(); } });
+$('#sl-ex').addEventListener('input', function (e) { state.ex = parseFloat(e.target.value); renderActive(); });
+
+/* views */
+var view3 = new View3D($('#cv3d'), draw3D, {
+  hit: function (x, y) { var p = view3.probeScreen; return p && Math.hypot(x - p[0], y - p[1]) < 15; },
+  onProbe: function (n) { setProbe(n); },
+  onPick: function (n) { setProbe(n); }
+});
+var plMohr = new Plot2D($('#cvMohr'), drawMohr, { pointer: mohrPointer, hover: mohrHover, leave: mohrLeave });
+var plLocus = new Plot2D($('#cvLocus'), drawLocus);
+var viewS = new View3D($('#cvStrain'), drawStrain, { yaw: -0.7, pitch: 0.4 });
+
+function renderActive() {
+  var t = state.tab;
+  if (t === 'explorer') { view3.render(); plMohr.render(); }
+  else if (t === 'failure') plLocus.render();
+  else if (t === 'strain') viewS.render();
+  else if (t === 'design') { plDesign.render(); plHist.render(); plPfd.render(); }
+}
+function changed() {
+  state.s = stressFromStrain(state.e);
+  recompute(); updateStressOut(); updateReadouts(); updateProbeUI(); updateFailure(); updateStrain(); renderActive();
+}
+
+/* tabs */
+function showTab(name) {
+  state.tab = name; document.body.dataset.tab = name;
+  $$('.tab').forEach(function (b) { b.setAttribute('aria-selected', b.getAttribute('data-tab') === name ? 'true' : 'false'); });
+  ['explorer', 'failure', 'strain', 'design', 'practice'].forEach(function (t) { $('#panel-' + t).hidden = t !== name; });
+  $('#shell').classList.toggle('solo', name === 'practice' || name === 'design');
+  try { history.replaceState(null, '', '#' + name); } catch (e) {}
+  requestAnimationFrame(name === 'design' ? updateDesign : renderActive);
+}
+$$('.tab').forEach(function (b) { b.addEventListener('click', function () { showTab(b.getAttribute('data-tab')); }); });
+
+/* ================= practice ================= */
+var prob = null, pmode = 'plane', stats = { ok: 0, n: 0 }, scored = false;
+var rnd = function () { return Math.round((Math.random() * 2 - 1) * 20) * 5; };
+function newProblem() {
+  var s;
+  if (pmode === 'plane') s = { xx: rnd(), yy: rnd(), zz: 0, xy: rnd(), yz: 0, zx: 0 };
+  else if (pmode === 'one') s = { xx: rnd(), yy: rnd(), zz: rnd(), xy: rnd(), yz: 0, zx: 0 };
+  else s = { xx: rnd(), yy: rnd(), zz: rnd(), xy: rnd(), yz: rnd(), zx: rnd() };
+  if (pmode !== 'gen' && s.xy === 0) s.xy = 20;
+  var e = eig3(tensor(s));
+  prob = { s: s, vals: e.vals, tmax: (e.vals[0] - e.vals[2]) / 2 }; scored = false;
+  var m = prob.s;
+  $('#probMatrix').innerHTML = [m.xx, m.xy, m.zx, m.xy, m.yy, m.yz, m.zx, m.yz, m.zz].map(function (x) { return '<span>' + fmt(x, 0) + '</span>'; }).join('');
+  $('#probText').textContent = pmode === 'plane' ? 'Plane stress: σzz, τyz and τzx are zero, so the third principal stress is 0.'
+    : pmode === 'one' ? 'τyz = τzx = 0, so σzz is itself a principal stress. Solve the x–y circle, then sort all three.'
+    : 'A full 3D state. Use the invariants and solve σ³ − I₁σ² + I₂σ − I₃ = 0, or use a calculator.';
+  ['a1', 'a2', 'a3', 'a4'].forEach(function (id, i) { $('#' + id).value = ''; $('#m' + (i + 1)).textContent = ''; $('#m' + (i + 1)).className = 'mark'; });
+  $('#sol').hidden = true;
+}
+function ok(user, truth) { return isFinite(user) && Math.abs(user - truth) <= Math.max(0.5, 0.01 * Math.abs(truth)); }
+$('#checkAns').addEventListener('click', function () {
+  var truth = [prob.vals[0], prob.vals[1], prob.vals[2], prob.tmax], all = true, any = false;
+  truth.forEach(function (t, i) {
+    var raw = $('#a' + (i + 1)).value, u = parseFloat(raw), m = $('#m' + (i + 1));
+    if (raw === '') { m.textContent = 'Enter a value'; m.className = 'mark'; all = false; return; }
+    any = true;
+    if (ok(u, t)) { m.textContent = 'Correct'; m.className = 'mark ok'; } else { m.textContent = 'Not quite'; m.className = 'mark no'; all = false; }
+  });
+  if (any && !scored) { stats.n++; if (all) stats.ok++; scored = true; $('#score').textContent = 'Score ' + stats.ok + ' / ' + stats.n; }
+});
+$('#showSol').addEventListener('click', function () {
+  var m = prob.s, v = prob.vals, h = '', I1 = m.xx + m.yy + m.zz;
+  var I2 = m.xx*m.yy + m.yy*m.zz + m.zz*m.xx - m.xy*m.xy - m.yz*m.yz - m.zx*m.zx, I3 = det3(tensor(m));
+  if (pmode !== 'gen') {
+    var C = (m.xx + m.yy) / 2, R = Math.hypot((m.xx - m.yy) / 2, m.xy), third = pmode === 'plane' ? 0 : m.zz;
+    h += '<p>In-plane circle: centre <code>(σxx+σyy)/2 = ' + fmt(C, 2) + '</code>, radius <code>R = √(((σxx−σyy)/2)² + τxy²) = ' + fmt(R, 2) + '</code>.</p>';
+    h += '<p>In-plane principal stresses <code>' + fmt(C + R, 2) + '</code> and <code>' + fmt(C - R, 2) + '</code>. The third principal stress is <code>σzz = ' + fmt(third, 2) + '</code>.</p>';
+  } else {
+    h += '<p><code>I₁ = ' + fmt(I1, 1) + '</code>, <code>I₂ = ' + fmt(I2, 1) + '</code>, <code>I₃ = ' + fmt(I3, 1) + '</code>.</p>';
+    h += '<p>Solve <code>σ³ − (' + fmt(I1, 1) + ')σ² + (' + fmt(I2, 1) + ')σ − (' + fmt(I3, 1) + ') = 0</code>.</p>';
+  }
+  h += '<p>Sorted: <code>σ₁ = ' + fmt(v[0], 2) + '</code>, <code>σ₂ = ' + fmt(v[1], 2) + '</code>, <code>σ₃ = ' + fmt(v[2], 2) + '</code>. Then <code>τmax = (σ₁ − σ₃)/2 = ' + fmt(prob.tmax, 2) + '</code>.</p>';
+  var el = $('#sol'); el.innerHTML = h; el.hidden = false;
+});
+$('#newProb').addEventListener('click', newProblem);
+$$('[data-pm]').forEach(function (b) {
+  b.addEventListener('click', function () {
+    pmode = b.getAttribute('data-pm');
+    $$('[data-pm]').forEach(function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
+    newProblem();
+  });
+});
+$('#openProb').addEventListener('click', function () {
+  setStress(prob.s); setProbe(add(A.vecs[0], A.vecs[2])); showTab('explorer');
+});
+
+/* ================= design and risk ================= */
+var STD = {
+  shaft: [6, 8, 10, 12, 14, 16, 18, 20, 22, 25, 28, 30, 32, 35, 38, 40, 42, 45, 48, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100, 110, 120, 130, 140, 150, 160, 180, 200, 220, 250, 280, 300, 350, 400, 450, 500, 600, 800, 1000, 1500],
+  vessel: [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10, 12, 14, 16, 18, 20, 25, 30, 35, 40, 50, 60, 80, 100, 150, 200, 300]
+};
+var DC = {
+  shaft: {
+    dimName: 'Diameter d', dimUnit: 'mm', dim: 40, dimCov: 4, sy: 350, syCov: 15, lo: 2, hi: 1500,
+    vars: [{ k: 'T', name: 'Torque T', unit: 'N·m', mean: 800, cov: 25 }, { k: 'M', name: 'Bending moment M', unit: 'N·m', mean: 500, cov: 25 }, { k: 'P', name: 'Axial load P', unit: 'kN', mean: 50, cov: 30 }],
+    note: 'Top outer fibre. σx = 32M/πd³ + 4P/πd², τxy = 16T/πd³. Diameter scatter is the machining tolerance.',
+    stress: function (v, d) { var pi = Math.PI; return { xx: 32 * v.M * 1000 / (pi * d*d*d) + 4 * v.P * 1000 / (pi * d*d), yy: 0, xy: 16 * v.T * 1000 / (pi * d*d*d) }; }
+  },
+  vessel: {
+    dimName: 'Wall thickness t', dimUnit: 'mm', dim: 8, dimCov: 8, sy: 250, syCov: 12, lo: 0.2, hi: 300,
+    vars: [{ k: 'p', name: 'Pressure p', unit: 'MPa', mean: 2, cov: 20 }, { k: 'r', name: 'Mean radius r', unit: 'mm', mean: 500, cov: 3 }],
+    note: 'Outer surface, x along the axis, y hoop. Hoop = pr/t, axial = pr/2t. Valid when r/t is about 10 or more.',
+    stress: function (v, t) { return { xx: v.p * v.r / (2 * t), yy: v.p * v.r / t, xy: 0 }; }
+  }
+};
+var D = { kase: 'shaft', theory: 'vm', fos: 2, pf: 0.001 }, dz = null;
+var THEORIES = [['vm', 'von Mises'], ['tresca', 'Tresca'], ['maxp', 'Max principal']];
+
+/* equivalent stress for a state with only xx, yy, xy (third principal stress is zero) */
+function eqPlane(xx, yy, xy, th) {
+  var C = (xx + yy) / 2, R = Math.hypot((xx - yy) / 2, xy), a = C + R, b = C - R;
+  var p1 = Math.max(a, 0), p3 = Math.min(b, 0), p2 = a + b - p1 - p3;
+  if (th === 'maxp') return Math.max(Math.abs(p1), Math.abs(p3));
+  if (th === 'tresca') return p1 - p3;
+  return Math.sqrt(0.5 * ((p1 - p2) * (p1 - p2) + (p2 - p3) * (p2 - p3) + (p3 - p1) * (p3 - p1)));
+}
+function fosGen(c, vals, sy, d, th) { var s = c.stress(vals, d), eq = eqPlane(s.xx, s.yy, s.xy, th); return eq > 1e-12 ? sy / eq : Infinity; }
+function means(c) { var m = {}; c.vars.forEach(function (v) { m[v.k] = v.mean; }); return m; }
+/* smallest size such that every larger size passes (isBad false) */
+function solveDim(isBad, lo, hi, n, iters) {
+  var lr = Math.log(lo), hr = Math.log(hi), lastBad = -1, i;
+  for (i = 0; i < n; i++) if (isBad(Math.exp(lr + (hr - lr) * i / (n - 1)))) lastBad = i;
+  if (lastBad < 0) return lo;
+  if (lastBad === n - 1) return NaN;
+  var a = Math.exp(lr + (hr - lr) * lastBad / (n - 1)), b = Math.exp(lr + (hr - lr) * (lastBad + 1) / (n - 1));
+  for (i = 0; i < iters; i++) { var m = (a + b) / 2; if (isBad(m)) a = m; else b = m; }
+  return b;
+}
+function nextStd(key, d) {
+  var L = STD[key];
+  for (var i = 0; i < L.length; i++) if (L[i] >= d * (1 - 1e-9)) return L[i];
+  return NaN;
+}
+
+/* seeded standard-normal samples, reused at every size so curves are smooth */
+function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; var t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+var mc = { seed: 20261019, N: 20000, Z: null, key: '' };
+function mcZ(nv) {
+  var key = mc.seed + '|' + mc.N + '|' + nv; if (mc.key === key) return;
+  var rng = mulberry32(mc.seed), j, i; mc.Z = [];
+  for (j = 0; j < nv; j++) {
+    var z = new Float64Array(mc.N);
+    for (i = 0; i < mc.N; i += 2) {
+      var u1 = Math.max(rng(), 1e-12), u2 = rng(), r = Math.sqrt(-2 * Math.log(u1));
+      z[i] = r * Math.cos(6.283185307179586 * u2); if (i + 1 < mc.N) z[i + 1] = r * Math.sin(6.283185307179586 * u2);
+    }
+    mc.Z.push(z);
+  }
+  mc.key = key;
+}
+function mcLoop(c, th, dimMean, keep) {
+  var nl = c.vars.length, N = mc.N, vals = {}, fails = 0, i, j, fos = null, sam = null;
+  if (keep) { fos = new Float64Array(N); sam = []; for (j = 0; j < nl + 2; j++) sam.push(new Float64Array(N)); }
+  var zs = mc.Z[nl], zd = mc.Z[nl + 1];
+  for (i = 0; i < N; i++) {
+    for (j = 0; j < nl; j++) { var v = c.vars[j]; vals[v.k] = v.mean * (1 + v.cov / 100 * mc.Z[j][i]); if (keep) sam[j][i] = vals[v.k]; }
+    var sy = Math.max(c.sy * (1 + c.syCov / 100 * zs[i]), 0.05 * c.sy), d = Math.max(dimMean * (1 + c.dimCov / 100 * zd[i]), 0.05 * dimMean);
+    var s = c.stress(vals, d), eq = eqPlane(s.xx, s.yy, s.xy, th), f = eq > 1e-12 ? Math.min(sy / eq, 1e6) : 1e6;
+    if (f < 1) fails++;
+    if (keep) { fos[i] = f; sam[nl][i] = sy; sam[nl + 1][i] = d; }
+  }
+  return { fails: fails, fos: fos, sam: sam };
+}
+function ranks(a) {
+  var n = a.length, idx = new Uint32Array(n), r = new Float64Array(n), i;
+  for (i = 0; i < n; i++) idx[i] = i;
+  idx.sort(function (x, y) { return a[x] - a[y]; });
+  for (i = 0; i < n; i++) r[idx[i]] = i;
+  return r;
+}
+function pearson(a, b) {
+  var n = a.length, ma = 0, mb = 0, i;
+  for (i = 0; i < n; i++) { ma += a[i]; mb += b[i]; } ma /= n; mb /= n;
+  var sab = 0, saa = 0, sbb = 0;
+  for (i = 0; i < n; i++) { var x = a[i] - ma, y = b[i] - mb; sab += x * y; saa += x * x; sbb += y * y; }
+  return saa > 1e-18 && sbb > 1e-18 ? sab / Math.sqrt(saa * sbb) : 0;
+}
+
+function updateDesign() {
+  var c = DC[D.kase], th = D.theory, i;
+  if (!(D.fos > 0) || !(D.pf > 0)) return;
+  var mu = means(c), nl = c.vars.length, N = mc.N;
+  var fosD = function (t, d) { return fosGen(c, mu, c.sy, d, t); };
+  var rows = THEORIES.map(function (t) {
+    var req = solveDim(function (d) { return fosD(t[0], d) < D.fos; }, c.lo, c.hi, 300, 50);
+    var st = isFinite(req) ? nextStd(D.kase, req) : NaN;
+    return { key: t[0], name: t[1], req: req, std: st, fosStd: isFinite(st) ? fosD(t[0], st) : NaN };
+  });
+  var sel = rows.filter(function (r) { return r.key === th; })[0];
+  var fin = rows.map(function (r) { return r.req; }).filter(isFinite);
+  var x0 = fin.length ? Math.max(c.lo, Math.min(Math.min.apply(null, fin) * 0.55, c.dim * 0.85)) : c.dim * 0.3;
+  var x1 = fin.length ? Math.min(c.hi, Math.max(Math.max.apply(null, fin) * 1.6, c.dim * 1.15)) : c.dim * 3;
+  var curves = {};
+  THEORIES.forEach(function (t) { var a = []; for (i = 0; i <= 140; i++) { var d = x0 * Math.pow(x1 / x0, i / 140); a.push([d, fosD(t[0], d)]); } curves[t[0]] = a; });
+
+  // Monte Carlo at the size in use
+  mcZ(nl + 2);
+  var res = mcLoop(c, th, c.dim, true), pf = res.fails / N, se = Math.sqrt(Math.max(pf * (1 - pf), 0) / N);
+  var sorted = Float64Array.from(res.fos).sort(), mean = 0;
+  for (i = 0; i < N; i++) mean += res.fos[i]; mean /= N;
+  var q = function (p) { return sorted[Math.min(N - 1, Math.floor(p * N))]; };
+  var nominal = fosD(th, c.dim);
+  var xmax = Math.max(q(0.995) * 1.05, 1.5), nb = 48, bins = new Array(nb).fill(0);
+  for (i = 0; i < N; i++) { var bi = Math.floor(res.fos[i] / xmax * nb); if (bi >= 0 && bi < nb) bins[bi]++; }
+
+  // importance
+  var names = c.vars.map(function (v) { return v.name; }).concat(['Yield strength σy', c.dimName + ' (tolerance)']);
+  var rk = ranks(res.fos), imp = [], tot = 0;
+  for (i = 0; i < nl + 2; i++) { var r = pearson(ranks(res.sam[i]), rk); imp.push({ name: names[i], r: r, sq: r * r }); tot += r * r; }
+  imp.forEach(function (o) { o.share = tot > 0 ? o.sq / tot * 100 : 0; });
+  imp.sort(function (a, b) { return b.share - a.share; });
+  // one at a time
+  var oat = [];
+  var fosWith = function (vals, sy, d) { return fosGen(c, vals, sy, d, th); };
+  c.vars.forEach(function (v) {
+    var lo = Object.assign({}, mu), hi = Object.assign({}, mu); lo[v.k] = v.mean * (1 - v.cov / 100); hi[v.k] = v.mean * (1 + v.cov / 100);
+    oat.push({ name: v.name, lo: fosWith(lo, c.sy, c.dim), hi: fosWith(hi, c.sy, c.dim) });
+  });
+  oat.push({ name: 'Yield strength σy', lo: fosWith(mu, c.sy * (1 - c.syCov / 100), c.dim), hi: fosWith(mu, c.sy * (1 + c.syCov / 100), c.dim) });
+  oat.push({ name: c.dimName, lo: fosWith(mu, c.sy, c.dim * (1 - c.dimCov / 100)), hi: fosWith(mu, c.sy, c.dim * (1 + c.dimCov / 100)) });
+  oat.forEach(function (o) { o.swing = Math.abs(o.hi - o.lo); });
+  oat.sort(function (a, b) { return b.swing - a.swing; });
+
+  // failure probability against size
+  var pfReq = solveDim(function (d) { return mcLoop(c, th, d, false).fails / N > D.pf; }, c.lo, c.hi, 40, 22);
+  var refs = [c.dim]; if (isFinite(sel.req)) refs.push(sel.req); if (isFinite(pfReq)) refs.push(pfReq);
+  var p0 = Math.max(c.lo, Math.min.apply(null, refs) * 0.7), p1 = Math.min(c.hi, Math.max.apply(null, refs) * 1.4);
+  var pts = [];
+  for (i = 0; i < 22; i++) { var dd = p0 * Math.pow(p1 / p0, i / 21); pts.push([dd, mcLoop(c, th, dd, false).fails / N]); }
+  var pfAtFos = isFinite(sel.req) ? mcLoop(c, th, sel.req, false).fails / N : NaN;
+  var pfStd = isFinite(sel.std) ? mcLoop(c, th, sel.std, false).fails / N : NaN;
+
+  dz = { c: c, th: th, rows: rows, sel: sel, xr: [x0, x1], curves: curves, ymax: D.fos * 2.4, N: N, pf: pf, se: se, mean: mean, p5: q(0.05), p50: q(0.5),
+         nominal: nominal, bins: bins, xmax: xmax, imp: imp, oat: oat, pts: pts, pfReq: pfReq, pfAtFos: pfAtFos, pfStd: pfStd, mu: mu };
+  paintDesign();
+  plDesign.render(); plHist.render(); plPfd.render();
+}
+var fmtP = function (p, N) {
+  if (p === 0) return '< ' + (100 / N < 0.01 ? (100 / N).toFixed(4) : (100 / N).toFixed(3)) + '%';
+  return (p * 100 >= 10 ? (p * 100).toFixed(1) : p * 100 >= 1 ? (p * 100).toFixed(2) : (p * 100).toPrecision(2)) + '%';
+};
+function paintDesign() {
+  var z = dz, c = z.c, u = ' ' + c.dimUnit, sel = z.sel;
+  $('#dNote').textContent = c.note;
+  $('#dReqL').textContent = 'Smallest size for FoS ' + fmt(D.fos, 2);
+  $('#dReq').textContent = isFinite(sel.req) ? fmt(sel.req, 2) + u : 'Over ' + c.hi + u;
+  $('#dReqSub').textContent = THEORIES.filter(function (t) { return t[0] === z.th; })[0][1] + ', mean loads and yield strength';
+  $('#dStd').textContent = isFinite(sel.std) ? fmt(sel.std, c.dimUnit === 'mm' && sel.std < 10 ? 1 : 0) + u : 'None in list';
+  $('#dStdSub').textContent = isFinite(sel.std) ? 'FoS there: ' + fmt(sel.fosStd, 2) : '';
+  $('#dTheories tbody').innerHTML = z.rows.map(function (r) {
+    var b = r.key === z.th ? ' style="font-weight:600"' : '';
+    return '<tr' + b + '><td>' + r.name + '</td><td class="num">' + (isFinite(r.req) ? fmt(r.req, 2) : '—') + '</td><td class="num">' + (isFinite(r.std) ? fmt(r.std, r.std < 10 ? 1 : 0) : '—') + '</td><td class="num">' + (isFinite(r.fosStd) ? fmt(r.fosStd, 2) : '—') + '</td></tr>';
+  }).join('');
+  // critical element
+  var s = c.stress(z.mu, c.dim), C = (s.xx + s.yy) / 2, R = Math.hypot((s.xx - s.yy) / 2, s.xy), pr = [C + R, C - R, 0].sort(function (a, b) { return b - a; });
+  var eq = eqPlane(s.xx, s.yy, s.xy, z.th);
+  $('#ceKV').innerHTML =
+    '<dt>' + c.dimName + ' in use</dt><dd>' + fmt(c.dim, 2) + u + '</dd><div class="sep"></div>' +
+    '<dt>σ<sub>xx</sub></dt><dd>' + fmt(s.xx, 2) + ' MPa</dd><dt>σ<sub>yy</sub></dt><dd>' + fmt(s.yy, 2) + ' MPa</dd><dt>τ<sub>xy</sub></dt><dd>' + fmt(s.xy, 2) + ' MPa</dd><div class="sep"></div>' +
+    '<dt>σ<sub>1</sub>, σ<sub>2</sub>, σ<sub>3</sub></dt><dd>' + pr.map(function (x) { return fmt(x, 1); }).join(', ') + '</dd>' +
+    '<dt>τ<sub>max</sub></dt><dd>' + fmt((pr[0] - pr[2]) / 2, 2) + ' MPa</dd>' +
+    '<dt>σ<sub>eq</sub> (' + THEORIES.filter(function (t) { return t[0] === z.th; })[0][1] + ')</dt><dd>' + fmt(eq, 2) + ' MPa</dd>' +
+    '<dt>Nominal factor of safety</dt><dd>' + (isFinite(z.nominal) ? fmt(z.nominal, 2) : '∞') + '</dd>';
+  $('#ceNote').textContent = 'Stresses use the mean loads. Open it in 3D Mohr to see the circles and any plane through this point.';
+  // Monte Carlo tiles
+  $('#mcTiles').innerHTML =
+    '<div><span class="label">Failure probability</span><div class="big" style="color:' + (z.pf > D.pf ? 'var(--bad)' : 'var(--good)') + '">' + fmtP(z.pf, z.N) + '</div><div class="sub">' + (z.pf === 0 ? 'no failures in ' + z.N.toLocaleString('en-US') + ' samples' : '± ' + fmtP(z.se, z.N).replace('< ', '') + ' (' + Math.round(z.pf * z.N) + ' of ' + z.N.toLocaleString('en-US') + ')') + '</div></div>' +
+    '<div><span class="label">Reliability</span><div class="big">' + (100 - z.pf * 100).toFixed(z.pf < 0.001 ? 3 : 2) + '%</div><div class="sub">target ' + (100 - D.pf * 100).toFixed(3) + '%</div></div>' +
+    '<div><span class="label">Mean factor of safety</span><div class="big">' + fmt(z.mean, 2) + '</div><div class="sub">nominal ' + (isFinite(z.nominal) ? fmt(z.nominal, 2) : '∞') + '</div></div>' +
+    '<div><span class="label">5th percentile FoS</span><div class="big">' + fmt(z.p5, 2) + '</div><div class="sub">median ' + fmt(z.p50, 2) + '</div></div>';
+  // importance
+  var any = z.imp.some(function (o) { return o.share > 0; });
+  $('#imp').innerHTML = any ? z.imp.map(function (o, i) {
+    return '<div class="imp-row"><span>' + o.name + '</span><span class="imp-bar"><span class="imp-fill' + (i === 0 ? ' top' : '') + '" style="width:' + o.share.toFixed(1) + '%"></span></span><span class="num">' + fmt(o.share, 0) + '%  r ' + fmt(o.r, 2) + '</span></div>';
+  }).join('') : '<p class="note">No input has scatter. Set a CoV above zero for at least one input.</p>';
+  $('#oat tbody').innerHTML = z.oat.map(function (o) {
+    return '<tr><td>' + o.name + '</td><td class="num">' + fmt(o.lo, 2) + '</td><td class="num">' + fmt(o.hi, 2) + '</td><td class="num">' + fmt(o.swing, 2) + '</td></tr>';
+  }).join('');
+  // Pf against size
+  $('#pfReq').textContent = isFinite(z.pfReq) ? fmt(z.pfReq, 2) + u : 'Over ' + c.hi + u;
+  $('#pfReqSub').textContent = 'Pf at most ' + fmtP(D.pf, 1e9).replace('< ', '');
+  $('#pfAtFos').textContent = isFinite(z.pfAtFos) ? fmtP(z.pfAtFos, z.N) : '—';
+  $('#pfAtFosSub').textContent = isFinite(sel.req) ? 'at ' + fmt(sel.req, 2) + u + ', where FoS is exactly ' + fmt(D.fos, 2) : '';
+  var top = z.imp[0];
+  $('#dSummary').textContent = 'With this scatter, a nominal factor of safety of ' + fmt(D.fos, 2) + ' still fails in ' + (isFinite(z.pfAtFos) ? fmtP(z.pfAtFos, z.N) : 'some') + ' of samples. '
+    + (isFinite(z.pfReq) && isFinite(sel.req) ? 'Meeting the failure-probability target needs ' + fmt(z.pfReq, 2) + u + ' instead of ' + fmt(sel.req, 2) + u + '. ' : '')
+    + (top && top.share > 0 ? 'The biggest driver is ' + top.name + ' (' + fmt(top.share, 0) + '% of the variation).' : '');
+}
+
+/* chart frame */
+function frame(pl, xr, yr, o) {
+  var c = pl.ctx, W = pl.W, H = pl.H, ml = 54, mr = 14, mt = 12, mb = 40, pw = W - ml - mr, ph = H - mt - mb, i;
+  var X = function (v) { return ml + (v - xr[0]) / (xr[1] - xr[0]) * pw; };
+  var l0 = o.ylog ? Math.log10(yr[0]) : 0, l1 = o.ylog ? Math.log10(yr[1]) : 0;
+  var Y = o.ylog ? function (v) { return mt + ph - (Math.log10(Math.max(v, yr[0])) - l0) / (l1 - l0) * ph; }
+                 : function (v) { return mt + ph - (v - yr[0]) / (yr[1] - yr[0]) * ph; };
+  var gx = ticks(xr[0], xr[1], 6), gy;
+  if (o.ylog) { gy = { list: [], step: 1 }; for (i = Math.ceil(l0 - 1e-9); i <= Math.floor(l1 + 1e-9); i++) gy.list.push(Math.pow(10, i)); }
+  else gy = ticks(yr[0], yr[1], 5);
+  c.lineWidth = 1; c.strokeStyle = TC.line2; c.beginPath();
+  gx.list.forEach(function (v) { var x = Math.round(X(v)) + 0.5; c.moveTo(x, mt); c.lineTo(x, mt + ph); });
+  gy.list.forEach(function (v) { var y = Math.round(Y(v)) + 0.5; c.moveTo(ml, y); c.lineTo(ml + pw, y); });
+  c.stroke();
+  c.strokeStyle = TC.ink2; c.lineWidth = 1.25; c.beginPath(); c.moveTo(ml + 0.5, mt); c.lineTo(ml + 0.5, mt + ph + 0.5); c.lineTo(ml + pw, mt + ph + 0.5); c.stroke();
+  gx.list.forEach(function (v) { txt(c, tickFmt(v, gx.step), X(v), mt + ph + 14, { font: '10px ' + MONO, color: TC.ink2, align: 'center' }); });
+  gy.list.forEach(function (v) {
+    var lab = o.ylog ? v.toExponential(0).replace('e-', 'e−') : o.yfmt ? o.yfmt(v) : tickFmt(v, gy.step);
+    txt(c, lab, ml - 6, Y(v) + 3, { font: '10px ' + MONO, color: TC.ink2, align: 'right' });
+  });
+  txt(c, o.xl || '', ml + pw / 2, H - 6, { font: '11px ' + SANS, color: TC.ink2, align: 'center' });
+  c.save(); c.translate(11, mt + ph / 2); c.rotate(-Math.PI / 2); txt(c, o.yl || '', 0, 0, { font: '11px ' + SANS, color: TC.ink2, align: 'center' }); c.restore();
+  return { X: X, Y: Y, ml: ml, mt: mt, pw: pw, ph: ph };
+}
+function vline(c, F, x, col, dash, y0, y1) {
+  c.strokeStyle = col; c.lineWidth = 1.4; c.setLineDash(dash || []); c.beginPath(); c.moveTo(x, y0 === undefined ? F.mt : y0); c.lineTo(x, y1 === undefined ? F.mt + F.ph : y1); c.stroke(); c.setLineDash([]);
+}
+function drawDesign(pl) {
+  if (!dz) return;
+  var c = pl.ctx, z = dz, F = frame(pl, z.xr, [0, z.ymax], { xl: z.c.dimName + ' (' + z.c.dimUnit + ')', yl: 'factor of safety' });
+  var col = { vm: TC.c13, tresca: TC.c12, maxp: TC.ink3 }, ty = F.Y(D.fos);
+  c.save(); c.beginPath(); c.rect(F.ml, F.mt, F.pw, F.ph); c.clip();
+  THEORIES.forEach(function (t) {
+    c.strokeStyle = col[t[0]]; c.lineWidth = t[0] === z.th ? 2.8 : 1.6; c.setLineDash(t[0] === 'maxp' ? [6, 4] : []); c.beginPath();
+    z.curves[t[0]].forEach(function (p, i) { var y = isFinite(p[1]) ? F.Y(Math.min(p[1], z.ymax * 2)) : F.mt - 10; if (i) c.lineTo(F.X(p[0]), y); else c.moveTo(F.X(p[0]), y); });
+    c.stroke(); c.setLineDash([]);
+  });
+  c.restore();
+  c.strokeStyle = TC.probe; c.lineWidth = 1.3; c.setLineDash([5, 4]); c.beginPath(); c.moveTo(F.ml, ty); c.lineTo(F.ml + F.pw, ty); c.stroke(); c.setLineDash([]);
+  txt(c, 'target ' + fmt(D.fos, 2), F.ml + F.pw - 4, ty - 6, { font: '600 11px ' + MONO, color: TC.probe, align: 'right' });
+  if (isFinite(z.sel.req)) {
+    var xr = F.X(z.sel.req);
+    vline(c, F, xr, TC.probe, [2, 3], ty, F.mt + F.ph);
+    c.beginPath(); c.arc(xr, ty, 5.5, 0, 6.2832); c.fillStyle = TC.probe; c.fill(); c.lineWidth = 2; c.strokeStyle = TC.surface; c.stroke();
+    var lab = fmt(z.sel.req, 1), right = xr > F.ml + F.pw * 0.7;
+    txt(c, lab, xr + (right ? -8 : 8), ty + 16, { font: '600 11px ' + MONO, color: TC.probe, align: right ? 'right' : 'left' });
+  }
+  var xu = F.X(z.c.dim);
+  vline(c, F, xu, TC.ink2, [1, 3]);
+  if (isFinite(z.nominal) && z.nominal < z.ymax) { c.beginPath(); c.rect(xu - 4, F.Y(z.nominal) - 4, 8, 8); c.fillStyle = TC.surface; c.fill(); c.strokeStyle = TC.ink; c.lineWidth = 1.4; c.stroke(); }
+  var onRight = xu > F.ml + F.pw * 0.8;
+  txt(c, 'in use ' + fmt(z.c.dim, 1), xu + (onRight ? -6 : 6), F.mt + 12, { font: '600 11px ' + MONO, color: TC.ink2, align: onRight ? 'right' : 'left' });
+}
+function drawHist(pl) {
+  if (!dz) return;
+  var c = pl.ctx, z = dz, nb = z.bins.length, mx = Math.max.apply(null, z.bins) / z.N * 1.12 || 0.01;
+  var F = frame(pl, [0, z.xmax], [0, mx], { xl: 'factor of safety', yl: 'share of samples', yfmt: function (v) { return fmt(v * 100, v * 100 >= 10 ? 0 : 1) + '%'; } });
+  var bw = F.pw / nb;
+  z.bins.forEach(function (n, i) {
+    var x0 = z.xmax * i / nb, x1 = z.xmax * (i + 1) / nb, bad = (x0 + x1) / 2 < 1;
+    var h = n / z.N / mx * F.ph;
+    c.fillStyle = bad ? alpha(TC.bad, 0.85) : alpha(TC.c13, 0.6);
+    c.fillRect(F.X(x0) + 0.5, F.mt + F.ph - h, Math.max(bw - 1, 1), h);
+  });
+  vline(c, F, F.X(1), TC.bad, [], F.mt, F.mt + F.ph);
+  txt(c, 'FoS 1', F.X(1) + 5, F.mt + 11, { font: '600 11px ' + MONO, color: TC.bad });
+  if (isFinite(z.nominal) && z.nominal < z.xmax) {
+    var xn = F.X(z.nominal); vline(c, F, xn, TC.probe, [4, 3]);
+    var right = xn > F.ml + F.pw * 0.75;
+    txt(c, 'nominal ' + fmt(z.nominal, 2), xn + (right ? -5 : 5), F.mt + 25, { font: '600 11px ' + MONO, color: TC.probe, align: right ? 'right' : 'left' });
+  }
+}
+function drawPfd(pl) {
+  if (!dz) return;
+  var c = pl.ctx, z = dz, N = z.N, floor = 0.5 / N;
+  var y0 = Math.pow(10, Math.floor(Math.log10(Math.min(floor, D.pf) * 0.9)));
+  var x0 = z.pts[0][0], x1 = z.pts[z.pts.length - 1][0];
+  var F = frame(pl, [x0, x1], [y0, 1], { xl: z.c.dimName + ' (' + z.c.dimUnit + ')', yl: 'failure probability', ylog: true });
+  var ty = F.Y(D.pf);
+  c.strokeStyle = TC.probe; c.lineWidth = 1.3; c.setLineDash([5, 4]); c.beginPath(); c.moveTo(F.ml, ty); c.lineTo(F.ml + F.pw, ty); c.stroke(); c.setLineDash([]);
+  txt(c, 'target ' + fmtP(D.pf, 1e9).replace('< ', ''), F.ml + F.pw - 4, ty - 6, { font: '600 11px ' + MONO, color: TC.probe, align: 'right' });
+  if (isFinite(z.sel.req) && z.sel.req >= x0 && z.sel.req <= x1) vline(c, F, F.X(z.sel.req), TC.c13, [5, 4]);
+  if (isFinite(z.pfReq) && z.pfReq >= x0 && z.pfReq <= x1) vline(c, F, F.X(z.pfReq), TC.probe, [2, 3]);
+  c.strokeStyle = TC.ink; c.lineWidth = 2; c.beginPath();
+  z.pts.forEach(function (p, i) { var x = F.X(p[0]), y = F.Y(Math.max(p[1], floor)); if (i) c.lineTo(x, y); else c.moveTo(x, y); });
+  c.stroke();
+  z.pts.forEach(function (p) {
+    var x = F.X(p[0]), y = F.Y(Math.max(p[1], floor)), zero = p[1] === 0;
+    c.beginPath(); c.arc(x, y, 3.2, 0, 6.2832); c.fillStyle = zero ? TC.surface : TC.ink; c.fill(); c.strokeStyle = TC.ink; c.lineWidth = 1.4; c.stroke();
+  });
+  var xu = F.X(z.c.dim);
+  if (z.c.dim >= x0 && z.c.dim <= x1) { vline(c, F, xu, TC.ink2, [1, 3]); txt(c, 'in use', xu + 5, F.mt + 12, { font: '600 11px ' + MONO, color: TC.ink2 }); }
+  txt(c, 'open circles: no failures in ' + N.toLocaleString('en-US') + ' samples', F.ml + 8, F.mt + F.ph - 8, { font: '10px ' + SANS, color: TC.ink2 });
+}
+var plDesign = new Plot2D($('#cvDesign'), drawDesign);
+var plHist = new Plot2D($('#cvHist'), drawHist);
+var plPfd = new Plot2D($('#cvPfd'), drawPfd);
+
+/* design controls */
+var dTimer = null;
+function scheduleDesign() { clearTimeout(dTimer); dTimer = setTimeout(function () { if (state.tab === 'design') updateDesign(); }, 130); }
+function buildVars() {
+  var c = DC[D.kase], tb = $('#dVars tbody'), rows = [];
+  c.vars.forEach(function (v) { rows.push({ label: v.name + ' (' + v.unit + ')', o: v, mk: 'mean', ck: 'cov' }); });
+  rows.push({ label: 'Yield strength σy (MPa)', o: c, mk: 'sy', ck: 'syCov' });
+  rows.push({ label: c.dimName + ' (' + c.dimUnit + '), tolerance', o: c, mk: 'dim', ck: 'dimCov' });
+  tb.innerHTML = '';
+  rows.forEach(function (r, i) {
+    var tr = document.createElement('tr');
+    tr.innerHTML = '<td>' + r.label + '</td><td class="num"><input class="vars-in" type="number" step="any" id="dv-m-' + i + '" aria-label="' + r.label + ' mean"></td><td class="num"><input class="vars-in" type="number" step="any" min="0" id="dv-c-' + i + '" aria-label="' + r.label + ' CoV percent"></td>';
+    tb.appendChild(tr);
+    var m = tr.querySelector('#dv-m-' + i), cv = tr.querySelector('#dv-c-' + i);
+    m.value = +r.o[r.mk].toFixed(4); cv.value = r.o[r.ck];
+    m.addEventListener('input', function () { var x = parseFloat(m.value); if (isFinite(x) && (r.mk === 'mean' || x > 0)) { r.o[r.mk] = x; scheduleDesign(); } });
+    cv.addEventListener('input', function () { var x = parseFloat(cv.value); if (isFinite(x) && x >= 0 && x < 60) { r.o[r.ck] = x; scheduleDesign(); } });
+  });
+}
+$('#dCase').addEventListener('change', function (e) { D.kase = e.target.value; buildVars(); updateDesign(); });
+$('#dTheory').addEventListener('change', function (e) { D.theory = e.target.value; updateDesign(); });
+$('#dFos').addEventListener('input', function (e) { var v = parseFloat(e.target.value); if (v > 0) { D.fos = v; scheduleDesign(); } });
+$('#dPf').addEventListener('input', function (e) { var v = parseFloat(e.target.value); if (v > 0 && v < 1) { D.pf = v; scheduleDesign(); } });
+$('#mcN').addEventListener('change', function (e) { mc.N = parseInt(e.target.value, 10); updateDesign(); });
+$('#mcSeed').addEventListener('click', function () { mc.seed = Math.floor(Math.random() * 1e9); updateDesign(); });
+$('#dUseStd').addEventListener('click', function () { if (dz && isFinite(dz.sel.std)) { DC[D.kase].dim = dz.sel.std; buildVars(); updateDesign(); } });
+$('#dOpen').addEventListener('click', function () {
+  if (!dz) return; var s = dz.c.stress(dz.mu, dz.c.dim);
+  setStress({ xx: s.xx, yy: s.yy, zz: 0, xy: s.xy, yz: 0, zx: 0 }); setProbe(add(A.vecs[0], A.vecs[2])); showTab('explorer');
+});
+buildVars();
+
+/* ================= theme + start ================= */
+function themeChanged() { readTheme(); renderActive(); }
+try { window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', themeChanged); } catch (e) {}
+new MutationObserver(themeChanged).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+readTheme(); state.e = strainFromStress(state.s); syncInputs(); state.s = stressFromStrain(state.e); recompute();
+state.n = unit(add(A.vecs[0], A.vecs[2]));
+newProblem();
+changed();
+var h0 = (location.hash || '').replace('#', '');
+if (['explorer', 'failure', 'strain', 'design', 'practice'].indexOf(h0) >= 0) showTab(h0);
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { renderActive(); });
+
+
+/* ================= redesign layer: UI only, no physics ================= */
+var angUnit = 'deg';
+function angTxt(d) { return angUnit === 'rad' ? fmt(d * Math.PI / 180, 3) + ' rad' : fmt(d, 0) + '°'; }
+function paintKpis() {
+  var v = A.vals, M = Math.max(Math.abs(v[0]), Math.abs(v[2]), 1e-9), d = [v[0], v[1], v[2], A.tmax];
+  $$('#kpis .kpi').forEach(function (el, i) {
+    var b = el.querySelector('b'), t = fmt(d[i], 2);
+    if (b.textContent !== t) { b.textContent = t; if (b.animate) b.animate([{ opacity: .35, transform: 'translateY(4px)' }, { opacity: 1, transform: 'none' }], { duration: 200, easing: 'ease-out' }); }
+    el.querySelector('i').style.width = Math.min(100, Math.abs(d[i]) / M * 100) + '%';
+  });
+}
+function paintFos(rows) {
+  var h = $('#fosMeters'); if (!h) return;
+  if (h.children.length !== rows.length) h.innerHTML = rows.map(function () { return '<div class="fm"><span></span><div class="fbar"><i></i></div><em></em></div>'; }).join('');
+  rows.forEach(function (r, i) {
+    var el = h.children[i], f = r.fos;
+    el.dataset.k = f >= 1.5 ? 'good' : f >= 1 ? 'warn' : 'bad';
+    el.children[0].textContent = r.name.split(' (')[0];
+    el.children[1].firstChild.style.width = (isFinite(f) ? Math.min(100, f / 3 * 100) : 100) + '%';
+    el.children[2].textContent = isFinite(f) ? fmt(f, 2) + '×' : '∞';
+  });
+}
+/* hover snapping: Mohr circle */
+var mHov = null;
+function mohrHover(x, y) {
+  var m = plMohr.map; if (!m) return;
+  var best = -1, bd = 1e18, yy = Math.min(y, m.y0), i;
+  for (i = 0; i < NS; i++) { var dx = m.X(A.sn[i]) - x, dy = m.Y(A.ta[i]) - yy, d = dx*dx + dy*dy; if (d < bd) { bd = d; best = i; } }
+  var h = bd < 900 ? best : null;
+  plMohr.cv.style.cursor = h === null ? 'crosshair' : 'pointer';
+  if (h !== mHov) { mHov = h; plMohr.render(); }
+}
+function mohrLeave() { if (mHov !== null) { mHov = null; plMohr.render(); } }
+plMohr.draw = function (pl) {
+  drawMohr(pl); if (mHov === null || !pl.map) return;
+  var c = pl.ctx, m = pl.map, x = m.X(A.sn[mHov]), y = m.Y(A.ta[mHov]);
+  c.beginPath(); c.arc(x, y, 9, 0, 6.2832); c.strokeStyle = TC.probe; c.lineWidth = 1.5; c.stroke();
+  c.beginPath(); c.arc(x, y, 3, 0, 6.2832); c.fillStyle = TC.probe; c.fill();
+  txt(c, 'σn ' + fmt(A.sn[mHov], 1) + '  τ ' + fmt(A.ta[mHov], 1), Math.min(Math.max(x, 70), pl.W - 70), Math.max(y - 16, 12), { font: '600 11px ' + MONO, color: TC.ink, align: 'center' });
+};
+/* hover snapping: sphere */
+var hov3 = null, hraf = 0, cv3 = $('#cv3d');
+cv3.addEventListener('pointermove', function (e) {
+  if (e.buttons) return;
+  var r = cv3.getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top;
+  var n = Math.hypot(px - view3.W / 2, py - view3.H / 2) < view3.R * 1.02 ? view3.pickSphere(px, py) : null;
+  if (!n && !hov3) return; hov3 = n; cancelAnimationFrame(hraf); hraf = requestAnimationFrame(function () { view3.render(); });
+});
+cv3.addEventListener('pointerleave', function () { if (hov3) { hov3 = null; view3.render(); } });
+view3.draw = function (v) {
+  draw3D(v); if (!hov3) return;
+  var c = v.ctx, p = v.proj(hov3), P = planeAt(A.S, hov3);
+  c.beginPath(); c.arc(p.x, p.y, 9, 0, 6.2832); c.strokeStyle = TC.ink; c.lineWidth = 1.5; c.stroke();
+  txt(c, 'σn ' + fmt(P.sn, 1) + '  τ ' + fmt(P.tau, 1), Math.min(Math.max(p.x, 70), v.W - 70), p.y - 16, { font: '600 11px ' + MONO, color: TC.ink, align: 'center' });
+};
+/* theme, settings, reset */
+var root = document.documentElement, mq = window.matchMedia('(prefers-color-scheme: dark)');
+function applyTheme(m) {
+  try { localStorage.setItem('mohr-theme', m); } catch (e) {}
+  root.dataset.mode = m; root.dataset.theme = m === 'system' ? (mq.matches ? 'dark' : 'light') : m;
+  $$('[data-themeset]').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.themeset === m); });
+}
+var savedTheme = 'system'; try { savedTheme = localStorage.getItem('mohr-theme') || 'system'; } catch (e) {}
+applyTheme(savedTheme);
+mq.addEventListener('change', function () { if (root.dataset.mode === 'system') applyTheme('system'); });
+$$('[data-themeset]').forEach(function (b) { b.addEventListener('click', function () { applyTheme(b.dataset.themeset); }); });
+$$('[data-ang]').forEach(function (b) { b.addEventListener('click', function () { angUnit = b.dataset.ang; $$('[data-ang]').forEach(function (x) { x.setAttribute('aria-pressed', x === b); }); updateProbeUI(); }); });
+var pop = $('#pop');
+$('#setBtn').addEventListener('click', function (e) { e.stopPropagation(); pop.classList.toggle('open'); });
+document.addEventListener('click', function (e) { if (!pop.contains(e.target)) pop.classList.remove('open'); });
+document.addEventListener('keydown', function (e) { if (e.key === 'Escape') pop.classList.remove('open'); });
+$('#resetBtn').addEventListener('click', function () {
+  state.E = 200; state.nu = 0.3; state.yieldS = 250; state.ex = 0.18;
+  $('#mE').value = 200; $('#mNu').value = 0.3; $('#yield').value = 250; $('#sl-ex').value = 0.18;
+  setStress(PRESETS[0][1]); setProbe(add(A.vecs[0], A.vecs[2])); updateFailure(); pop.classList.remove('open');
+});
+/* nav indicator, rail toggle / bottom drawer */
+function placeInd() { var a = $('.tab[aria-selected=true]'), i = $('#ind'); if (a && i) { i.style.width = a.offsetWidth + 'px'; i.style.transform = 'translateX(' + a.offsetLeft + 'px)'; } }
+new MutationObserver(placeInd).observe($('.tabs'), { attributes: true, subtree: true, attributeFilter: ['aria-selected'] });
+addEventListener('resize', placeInd); if (document.fonts) document.fonts.ready.then(placeInd); placeInd();
+document.body.dataset.tab = state.tab;
+var rail = $('.rail'), handle = document.createElement('button');
+handle.className = 'handle'; handle.type = 'button'; handle.innerHTML = '<span></span>Controls'; rail.prepend(handle);
+function toggleRail() { if (matchMedia('(max-width:940px)').matches) rail.classList.toggle('open'); else { $('#shell').classList.toggle('collapsed'); setTimeout(renderActive, 320); } }
+handle.addEventListener('click', toggleRail); $('#railBtn').addEventListener('click', toggleRail);
+/* sliders: fill track + value bubble */
+var tip = document.createElement('div'); tip.className = 'tip'; document.body.appendChild(tip);
+function rfill(r) { r.style.setProperty('--p', ((+r.value - r.min) / (r.max - r.min) * 100) + '%'); }
+function rtip(r) {
+  var rc = r.getBoundingClientRect(), p = (r.value - r.min) / (r.max - r.min);
+  tip.textContent = r.id.indexOf('r-') === 0 ? fmt(+r.value, 0) + ' με' : r.id === 'sl-ex' ? '×' + (+r.value).toFixed(2) : angTxt(+r.value);
+  tip.style.left = (rc.left + 9 + p * (rc.width - 18)) + 'px'; tip.style.top = (rc.top - 6) + 'px'; tip.classList.add('on');
+}
+$$('input[type=range]').forEach(function (r) {
+  rfill(r);
+  ['input', 'pointerenter', 'pointermove', 'focus'].forEach(function (ev) { r.addEventListener(ev, function () { rfill(r); rtip(r); }); });
+  ['pointerleave', 'blur'].forEach(function (ev) { r.addEventListener(ev, function () { tip.classList.remove('on'); }); });
+});
+setInterval(function () { $$('input[type=range]').forEach(rfill); }, 150);
+/* icons + tooltips */
+var IP = { s: 'M4 6h16M4 12h16M4 18h16', c: 'M12 3a9 9 0 100 18 9 9 0 000-18zM3 12h18', g: 'M3 3v18h18M7 15l4-5 3 3 5-6', b: 'M12 2l9 5v10l-9 5-9-5V7zM12 12l9-5M12 12v10M12 12L3 7', t: 'M12 3v18M3 12h18' };
+var IM = { 'h-stress': 's', 'h-sout': 's', 'h-prin': 'c', 'h-3d': 'c', 'h-mohr': 'c', 'h-plane': 't', 'h-fail': 'g', 'h-loc': 'g', 'h-st': 'b', 'h-def': 'b', 'h-dm': 's', 'h-ds': 'g', 'h-ce': 't', 'h-mc': 'g', 'h-imp': 'g', 'h-pfd': 'g', 'h-pr': 't' };
+Object.keys(IM).forEach(function (id) { var h = $('#' + id); if (h) h.insertAdjacentHTML('afterbegin', '<svg class="ic" viewBox="0 0 24 24"><path d="' + IP[IM[id]] + '"/></svg>'); });
+var TT = { mE: "Young's modulus: stiffness in tension", mNu: "Poisson's ratio: lateral / axial strain", yield: 'Yield strength used for every factor of safety', dFos: 'Nominal factor of safety to design for', dPf: 'Acceptable probability that FoS < 1' };
+Object.keys(TT).forEach(function (id) { var e = $('#' + id); if (e) e.title = TT[id]; });
+
+/* test hook */
+window.__lab = { DC: DC, D: D, mc: mc, updateDesign: updateDesign, getDz: function () { return dz; }, solveDim: solveDim, eqPlane: eqPlane, analyze: analyze, planeAt: planeAt, tensor: tensor, inplane: inplane, strains: strains, state: state };
+})();
+</script>
+</body></html>
